@@ -1,0 +1,4 @@
+# Ignore key files
+bot_token.txt
+rooms.json
+*.pem
