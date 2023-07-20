@@ -30,6 +30,7 @@ if os.path.exists('blacklist_data.json'):
 else:
     blacklist_data = {}
 
+
 @bot.event
 async def on_voice_state_update(member, before, after):
     if member == bot.user:  # Ignore bot's own voice state updates
@@ -107,14 +108,12 @@ async def on_voice_state_update(member, before, after):
         embed.add_field(name='Feature Control Panel',
                         value='set features for your room\n'
                               '💻 - Screen sharing & Camera\n'
-                              '🔄 - Update room name (will take some time)\n\n', inline=False)
+                              '💾 - Update room name (will take some time)\n\n', inline=False)
 
         message = await new_channel.send(embed=embed)
-        emojis = ['🌴', '🔞', '⏱', '🎉', '🎙️', '🃏', '📺', '🔒', '🎮', '📋', '🔈', '🔉', '🔊', '💻', '🔄']
+        emojis = ['🌴', '🔞', '⏱', '🎉', '🎙️', '🃏', '📺', '🔒', '🎮', '📋', '🔈', '🔉', '🔊', '💻', '💾']
         for emoji in emojis:
             await message.add_reaction(emoji)
-
-
 
 #--------------------------------------#
 #           On Reaction Add            #
@@ -139,8 +138,6 @@ async def on_reaction_add(reaction, user):
                 if react.emoji == '🌴':  # Replace with your specific emoji
                     await react.remove(user)  # Remove the reaction of the user 'user'
             return
-        # Add functionality for '🌴' reaction here
-        # await channel.edit(name=f'🌴' + channel.name)
         pass
 
     if reaction.emoji == '🔞':
@@ -214,13 +211,12 @@ async def on_reaction_add(reaction, user):
             color=discord.Color.blue()
         )
 
-        embed.add_field(name="Cards Against Humanity", value="https://picturecards.online/static/index.html", inline=False)
-        embed.add_field(name="Random Common Card & Board Games", value="https://playingcards.io/games/", inline=False)
-        embed.add_field(name="Random Multiplayer Games", value="https://boardgamearena.com/lobby", inline=False)
+        embed.add_field(name="Cards Against Humanity", value="https://picturecards.online/static/index.html\nor use /cah packs then /cah create\n", inline=False)
+        embed.add_field(name="Random Common Card & Board Games", value="https://playingcards.io/games/\n", inline=False)
+        embed.add_field(name="Random Multiplayer Games", value="https://boardgamearena.com/lobby\n", inline=False)
         embed.add_field(name="Games available:", value="Uno (called solo)\nYahtzee\nand much more", inline=False)
         await channel.send(embed=embed)
         pass
-
 
     if reaction.emoji == '📺':
         # Check if the user is the owner of the room
@@ -242,8 +238,6 @@ async def on_reaction_add(reaction, user):
         permissions.update(speak=False)
         # Apply the modified permissions
         await channel.set_permissions(general_access_role, overwrite=permissions)
-
-
 
     if reaction.emoji == '🎮':
         # Check if the user is the owner of the room
@@ -306,7 +300,7 @@ async def on_reaction_add(reaction, user):
         discord_mod_permissions = channel.overwrites_for(discord_mod_role)
         # Modify the specific permissions
         everyone_permissions.update(read_messages=False, view_channel=False, connect=False)
-        general_access_permissions.update(read_messages=False, connect=False)
+        general_access_permissions.update(read_messages=False, view_channel=True, connect=False)
         discord_mod_permissions.update(manage_messages=False, mute_members=False, deafen_members=False, move_members=False)
         # Set the permissions back
         await channel.set_permissions(everyone_role, overwrite=everyone_permissions)
@@ -315,19 +309,18 @@ async def on_reaction_add(reaction, user):
         await channel.send(f'{user.mention} you have locked the room')
         pass
 
-
-    if reaction.emoji == '🔄':
+    if reaction.emoji == '💾':
         # Check if the user is the owner of the room
         if rooms.get(channel.id) != user.id:
             print("User is not the owner of the room")
             return
-        # Add functionality for '🔄' reaction here
+        # Add functionality for '💾' reaction here
         owner = user
         message = reaction.message
         reactions = message.reactions
         emoji_order = ['🔒', '🎮', '📋', '🌴', '🔞', '⏱', '🎉', '🎙️', '🃏', '📺', '💻', '🔊', '🔉', '🔈']
         emoji_priority = {emoji: i for i, emoji in enumerate(emoji_order)}
-        emoji_name_list = sorted([(react.emoji, emoji_priority.get(react.emoji, float('inf'))) for react in reactions if owner in await react.users().flatten() and react.emoji != '🔄'], key=lambda x: x[1])
+        emoji_name_list = sorted([(react.emoji, emoji_priority.get(react.emoji, float('inf'))) for react in reactions if owner in await react.users().flatten() and react.emoji != '💾'], key=lambda x: x[1])
 
         # Only add '👾' if no other emojis were used
         if emoji_name_list:
