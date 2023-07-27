@@ -39,11 +39,10 @@ async def on_voice_state_update(member, before, after):
     # When a user leaves a channel
     if before.channel is not None and after.channel is None:
         if before.channel.id in rooms and rooms[before.channel.id] == member.id:
-            await before.channel.delete()
-            del rooms[before.channel.id]
-
-            with open('rooms.json', 'w') as file:
-                json.dump(rooms, file)
+            await asyncio.sleep(10)  # Wait for 30sec
+            if before.channel.members == []:
+                await before.channel.delete()
+                del rooms[before.channel.id]
 
     # Do something when a user joins a '🛸' channel
     elif after.channel and '🛸' in after.channel.name:
@@ -55,10 +54,9 @@ async def on_voice_state_update(member, before, after):
             blacklisted_member = discord.utils.get(member.guild.members, id=blacklisted_user_id)
             if blacklisted_member:  # Ensure the member was found
                 overwrites[blacklisted_member] = discord.PermissionOverwrite(connect=False)
-        
 
         new_channel = await after.channel.category.create_voice_channel(
-            name=f'👾┃{member.nick if member.nick else member.name}\'s room',
+            name=f'👽┃{member.nick if member.nick else member.name}\'s room',
             user_limit=after.channel.user_limit,
             overwrites=overwrites
         )
@@ -66,12 +64,6 @@ async def on_voice_state_update(member, before, after):
         await member.move_to(new_channel)
 
         rooms[new_channel.id] = member.id
-
-        with open('rooms.json', 'w') as file:
-            json.dump(rooms, file)
-
-        #sleep timer 1 sec
-        await asyncio.sleep(1)
 
         # Create the main embed message
         embed = discord.Embed(
@@ -114,6 +106,10 @@ async def on_voice_state_update(member, before, after):
         emojis = ['🌴', '🔞', '⏱', '🎉', '🎙️', '🃏', '📺', '🔒', '🎮', '📋', '🔈', '🔉', '🔊', '💻', '💾']
         for emoji in emojis:
             await message.add_reaction(emoji)
+
+    if rooms:
+        with open('rooms.json', 'w') as file:
+            json.dump(rooms, file)
 
 #--------------------------------------#
 #           On Reaction Add            #
@@ -322,9 +318,9 @@ async def on_reaction_add(reaction, user):
         emoji_priority = {emoji: i for i, emoji in enumerate(emoji_order)}
         emoji_name_list = sorted([(react.emoji, emoji_priority.get(react.emoji, float('inf'))) for react in reactions if owner in await react.users().flatten() and react.emoji != '💾'], key=lambda x: x[1])
 
-        # Only add '👾' if no other emojis were used
+        # Only add '👽' if no other emojis were used
         if emoji_name_list:
-            channel_name = channel.name.replace('👾', '').strip()
+            channel_name = channel.name.replace('👽', '').strip()
         else:
             channel_name = channel.name
 
@@ -474,139 +470,7 @@ async def on_reaction_remove(reaction, user):
             # Add additional functionality for '🔊' reaction here
 
 
-#--------------------------------------#
-#               Commands               #
-#--------------------------------------#
-@bot.slash_command(name="allow", description="Allow a user or a role to join your AutoRoom")
-async def _allow(ctx, target: Union[Member, Role]):
-    # Allow a user or a role to join your AutoRoom
-    if ctx.author.voice is not None and ctx.author.voice.channel.id in rooms and rooms[ctx.author.voice.channel.id] == ctx.author.id:
-        overwrites = ctx.author.voice.channel.overwrites_for(target)
-        overwrites.connect = True
-        await ctx.author.voice.channel.set_permissions(target, overwrite=overwrites)
-        await ctx.respond(f'{target.mention} has been allowed to join {ctx.author.voice.channel.name}.')
-    else:
-        await ctx.respond('This command can only be used in your AutoRoom.')
 
-@bot.slash_command(name="deny", description="Deny a user or a role from joining your AutoRoom")
-async def _deny(ctx, target: Union[Member, Role]):
-    # Deny a user or a role from joining your AutoRoom
-    if ctx.author.voice is not None and ctx.author.voice.channel.id in rooms and rooms[ctx.author.voice.channel.id] == ctx.author.id:
-        overwrites = ctx.author.voice.channel.overwrites_for(target)
-        overwrites.connect = False
-        await ctx.author.voice.channel.set_permissions(target, overwrite=overwrites)
-        await ctx.respond(f'{target.mention} has been denied from joining {ctx.author.voice.channel.name}.')
-    else:
-        await ctx.respond('This command can only be used in your AutoRoom.')
-
-
-@bot.slash_command(name="set_limit", description="Set the user limit for the AutoRoom")
-async def _set_limit(ctx, limit: int):
-    # Set the user limit for the AutoRoom
-    if ctx.author.voice is not None and ctx.author.voice.channel.id in rooms:
-        # Check if the user is the owner of the room
-        if rooms[ctx.author.voice.channel.id] == ctx.author.id:
-            if 0 <= limit <= 99:  # Discord allows a limit between 0 and 99
-                await ctx.author.voice.channel.edit(user_limit=limit)
-                await ctx.respond(f'The user limit for {ctx.author.voice.channel.name} has been set to {limit}.')
-            else:
-                await ctx.respond('Invalid limit. Please enter a number between 0 and 99.')
-        else:
-            await ctx.respond('You are not the owner of this room.')
-    else:
-        await ctx.respond('This command can only be used in a created room.')
-
-@bot.slash_command(name="blacklist", description="Permanently deny a user from joining your rooms")
-async def _blacklist(ctx, target: Member):
-    # Blacklist a user
-    if ctx.author.id not in blacklist_data:
-        blacklist_data[ctx.author.id] = set()
-    blacklist_data[ctx.author.id].add(target.id)
-
-    # Save the updated blacklist_data
-    with open('blacklist_data.json', 'w') as file:
-        json.dump(blacklist_data, file)
-        
-    await ctx.respond(f"{target.name} has been blacklisted and won't be able to join your future rooms.")
-
-@bot.slash_command(name="mute_all", description="Mute everyone in the AutoRoom")
-async def _mute_all(ctx):
-    # Mute everyone in the AutoRoom
-    if ctx.author.voice is not None and ctx.author.voice.channel.id in rooms:
-        # Check if the user is the owner of the room
-        if rooms[ctx.author.voice.channel.id] == ctx.author.id:
-            for member in ctx.author.voice.channel.members:
-                if member != ctx.author:  # Don't mute the owner
-                    await member.edit(mute=True)
-            await ctx.respond('Everyone in the room has been muted.')
-        else:
-            await ctx.respond('You are not the owner of this room.')
-    else:
-        await ctx.respond('This command can only be used in a created room.')
-
-@bot.slash_command(name="unmute_all", description="Unmute everyone in the AutoRoom")
-async def _unmute_all(ctx):
-    # Unmute everyone in the AutoRoom
-    if ctx.author.voice is not None and ctx.author.voice.channel.id in rooms:
-        # Check if the user is the owner of the room
-        if rooms[ctx.author.voice.channel.id] == ctx.author.id:
-            for member in ctx.author.voice.channel.members:
-                await member.edit(mute=False)
-            await ctx.respond('Everyone in the room has been unmuted.')
-        else:
-            await ctx.respond('You are not the owner of this room.')
-    else:
-        await ctx.respond('This command can only be used in a created room.')
-
-@bot.slash_command(name="view_blacklist", description="View the users and roles on your blacklist")
-async def _view_blacklist(ctx):
-    # View the blacklist
-    if ctx.author.id in blacklist_data:
-        blacklist = blacklist_data[ctx.author.id]
-        if blacklist:
-            blacklist_mentions = [f'<@{id}>' for id in blacklist]  # convert IDs to mentions
-            await ctx.respond('Your blacklist: ' + ', '.join(blacklist_mentions))
-        else:
-            await ctx.respond('Your blacklist is empty.')
-    else:
-        await ctx.respond('You have not blacklisted anyone yet.')
-
-@bot.slash_command(name="clear_blacklist", description="Clear your blacklist")
-async def _clear_blacklist(ctx):
-    # Clear the blacklist
-    if ctx.author.id in blacklist_data:
-        blacklist_data[ctx.author.id].clear()
-        await ctx.respond('Your blacklist has been cleared.')
-    else:
-        await ctx.respond('You have not blacklisted anyone yet.')
-
-@bot.slash_command(name="update", description="Update user roles")
-async def _update(ctx):
-    # Send an initial response immediately
-    await ctx.defer()
-
-    member = ctx.author
-    roles = [role.id for role in member.roles if role != ctx.guild.default_role]  # exclude @everyone role
-
-    # Save roles to a file
-    with open(f'{member.id}_roles.json', 'w') as file:
-        json.dump(roles, file)
-
-    # Remove all roles from the member
-    for role in member.roles:
-        if role != ctx.guild.default_role:  # exclude @everyone role
-            await member.remove_roles(role)
-
-    # Reassign the roles from the file back to the user
-    with open(f'{member.id}_roles.json', 'r') as file:
-        roles = json.load(file)
-
-    for role_id in roles:
-        role = ctx.guild.get_role(role_id)
-        if role:
-            await member.add_roles(role)
-
-    await ctx.send("Your roles have been updated.")
 
 @bot.event
 async def on_ready():
