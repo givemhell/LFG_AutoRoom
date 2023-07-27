@@ -39,7 +39,7 @@ async def on_voice_state_update(member, before, after):
     # When a user leaves a channel
     if before.channel is not None and after.channel is None:
         if before.channel.id in rooms and rooms[before.channel.id] == member.id:
-            await asyncio.sleep(10)  # Wait for 30sec
+            await asyncio.sleep(30)  # Wait for 30sec
             if before.channel.members == []:
                 await before.channel.delete()
                 del rooms[before.channel.id]
@@ -107,9 +107,8 @@ async def on_voice_state_update(member, before, after):
         for emoji in emojis:
             await message.add_reaction(emoji)
 
-    if rooms:
-        with open('rooms.json', 'w') as file:
-            json.dump(rooms, file)
+    with open('rooms.json', 'w') as file:
+        json.dump(rooms, file)
 
 #--------------------------------------#
 #           On Reaction Add            #
@@ -120,357 +119,321 @@ async def on_reaction_add(reaction, user):
     if user == bot.user:
         return
 
-    print(reaction.emoji)
     channel = reaction.message.channel
     if not isinstance(channel, discord.VoiceChannel):
         return
 
-    if reaction.emoji == '🌴':
-        # Check if the user is the owner of the room
-        if rooms.get(channel.id) != user.id:
-            print("User is not the owner of the room")
-            await channel.send(f'{user.mention} you are not the owner of the room')
-            for react in reaction.message.reactions:
-                if react.emoji == '🌴':  # Replace with your specific emoji
-                    await react.remove(user)  # Remove the reaction of the user 'user'
-            return
-        pass
+    if rooms.get(channel.id) != user.id:
+        print('User is not the owner of the room')
+        await channel.send(f'{user.mention} you are not the owner of the room')
+        for react in reaction.message.reactions:
+            if react.emoji == reaction.emoji:
+                await react.remove(user)
+        return
 
-    if reaction.emoji == '🔞':
-        # Check if the user is the owner of the room
-        if rooms.get(channel.id) != user.id:
-            print("User is not the owner of the room")
-            await channel.send(f'{user.mention} you are not the owner of the room')
-            for react in reaction.message.reactions:
-                if react.emoji == '🔞':  # Replace with your specific emoji
-                    await react.remove(user)  # Remove the reaction of the user 'user'
-            return
-        # Add functionality for '🔞' reaction here
-        # await channel.edit(name=f'🔞' + channel.name)
-        pass
+    print(reaction.emoji)
 
-    if reaction.emoji == '⏱':
-        # Check if the user is the owner of the room
-        if rooms.get(channel.id) != user.id:
-            print("User is not the owner of the room")
-            await channel.send(f'{user.mention} you are not the owner of the room')
-            for react in reaction.message.reactions:
-                if react.emoji == '⏱':
-                    await react.remove(user)
-            return
-        # Add functionality for '⏱' reaction here
-        # await channel.edit(name=f'⏱' + channel.name)
-        # set a max limit of 5 users in the room
-        await channel.edit(user_limit=5)
-        pass
+    reaction_handlers = {
+        '🌴': handle_palm_tree,
+        '🔞': handle_adult_content,
+        '⏱': handle_timer,
+        '🎉': handle_party,
+        '🎙️': handle_microphone,
+        '🃏': handle_card_game,
+        '📺': handle_tv,
+        '🎮': handle_video_game,
+        '🔒': handle_lock,
+        '💾': handle_save,
+        '💻': handle_computer,
+        '🔈': handle_volume_down,
+        '🔉': handle_volume_medium,
+        '🔊': handle_volume_up,
+    }
 
-    if reaction.emoji == '🎉':
-        # Check if the user is the owner of the room
-        if rooms.get(channel.id) != user.id:
-            print("User is not the owner of the room")
-            await channel.send(f'{user.mention} you are not the owner of the room')
-            for react in reaction.message.reactions:
-                if react.emoji == '🎉':  # Replace with your specific emoji
-                    await react.remove(user)  # Remove the reaction of the user 'user'
-            return
-        # Add functionality for '🎉' reaction here
-        # await channel.edit(name=f'🎉' + channel.name)
-        pass
-
-    if reaction.emoji == '🎙️':
-        # Check if the user is the owner of the room
-        if rooms.get(channel.id) != user.id:
-            print("User is not the owner of the room")
-            await channel.send(f'{user.mention} you are not the owner of the room')
-            for react in reaction.message.reactions:
-                if react.emoji == '🎙️':  # Replace with your specific emoji
-                    await react.remove(user)  # Remove the reaction of the user 'user'
-            return
-        # Add functionality for '🎙️' reaction here
-        # await channel.edit(name=f'🎙️' + channel.name)
-        pass
-
-    if reaction.emoji == '🃏':
-        # Check if the user is the owner of the room
-        if rooms.get(channel.id) != user.id:
-            print("User is not the owner of the room")
-            await channel.send(f'{user.mention} you are not the owner of the room')
-            for react in reaction.message.reactions:
-                if react.emoji == '🃏':
-                    await react.remove(user)
-            return
-        # Add functionality for '🃏' reaction here
-        # await channel.edit(name=f'🃏' + channel.name)        
-        embed = discord.Embed(
-            title="Game Resources",
-            description="Here are some links to online games you can play:",
-            color=discord.Color.blue()
-        )
-
-        embed.add_field(name="Cards Against Humanity", value="https://picturecards.online/static/index.html\nor use /cah packs then /cah create\n", inline=False)
-        embed.add_field(name="Random Common Card & Board Games", value="https://playingcards.io/games/\n", inline=False)
-        embed.add_field(name="Random Multiplayer Games", value="https://boardgamearena.com/lobby\n", inline=False)
-        embed.add_field(name="Games available:", value="Uno (called solo)\nYahtzee\nand much more", inline=False)
-        await channel.send(embed=embed)
-        pass
-
-    if reaction.emoji == '📺':
-        # Check if the user is the owner of the room
-        if rooms.get(channel.id) != user.id:
-            print("User is not the owner of the room")
-            await channel.send(f'{user.mention} you are not the owner of the room')
-            for react in reaction.message.reactions:
-                if react.emoji == '📺':
-                    await react.remove(user)
-            return
-        # Add functionality for '📺' reaction here
-        # await channel.edit(name=f'📺 {channel.name}')
-        # Get the role
-        general_access_role_id = 1070344422799200306
-        general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
-        # Get the current permissions of the role in the channel
-        permissions = channel.overwrites_for(general_access_role)
-        # Modify the 'speak' permission
-        permissions.update(speak=False)
-        # Apply the modified permissions
-        await channel.set_permissions(general_access_role, overwrite=permissions)
-
-    if reaction.emoji == '🎮':
-        # Check if the user is the owner of the room
-        if rooms.get(channel.id) != user.id:
-            print("User is not the owner of the room")
-            await channel.send(f'{user.mention} you are not the owner of the room')
-            for react in reaction.message.reactions:
-                if react.emoji == '🎮':  # Replace with your specific emoji
-                    await react.remove(user)  # Remove the reaction of the user 'user'
-            return
-        # Add functionality for '🎮' reaction here
-        creator = channel.guild.get_member(channel.guild.owner_id)
-        if creator is not None and creator.activities:
-            # await channel.edit(name=f'🎮' + channel.name)
-            creator_game = None
-            for activity in creator.activities:
-                if isinstance(activity, discord.Game):
-                    creator_game = activity.name
-                    break
-            if creator_game is not None:
-                overwrites = channel.overwrites
-                for member in channel.guild.members:
-                    member_game = None
-                    for activity in member.activities:
-                        if isinstance(activity, discord.Game):
-                            member_game = activity.name
-                            break
-                    if member_game == creator_game:
-                        overwrites[member] = discord.PermissionOverwrite(connect=True)
-                    else:
-                        overwrites[member] = discord.PermissionOverwrite(connect=False)
-                await channel.edit(overwrites=overwrites)
-                pass
-        else:
-                print('else')
-                for react in reaction.message.reactions:
-                    if react.emoji == '🎮':  # Replace with your specific emoji
-                        await react.remove(user)  # Remove the reaction of the user 'user'
-                        await channel.send(f'{user.mention} you are not playing a game')
-                        break
-                    pass
-
-    if reaction.emoji == '🔒':
-        if rooms.get(channel.id) != user.id:
-            print("User is not the owner of the room")
-            await channel.send(f'{user.mention} you are not the owner of the room')
-            for react in reaction.message.reactions:
-                if react.emoji == '🔒':  
-                    await react.remove(user)  
-            return
-        # await channel.edit(name=f'🔒 {channel.name}')
-        everyone_role = discord.utils.get(channel.guild.roles, name='@everyone')
-        general_access_role_id = 1070344422799200306
-        general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
-        discord_mod_role_id = 578664579584753685
-        discord_mod_role = discord.utils.get(channel.guild.roles, id=discord_mod_role_id)
-        # Get the current permissions of the roles in the channel
-        everyone_permissions = channel.overwrites_for(everyone_role)
-        general_access_permissions = channel.overwrites_for(general_access_role)
-        discord_mod_permissions = channel.overwrites_for(discord_mod_role)
-        # Modify the specific permissions
-        everyone_permissions.update(read_messages=False, view_channel=False, connect=False)
-        general_access_permissions.update(read_messages=False, view_channel=True, connect=False)
-        discord_mod_permissions.update(manage_messages=False, mute_members=False, deafen_members=False, move_members=False)
-        # Set the permissions back
-        await channel.set_permissions(everyone_role, overwrite=everyone_permissions)
-        await channel.set_permissions(general_access_role, overwrite=general_access_permissions)
-        await channel.set_permissions(discord_mod_role, overwrite=discord_mod_permissions)
-        await channel.send(f'{user.mention} you have locked the room')
-        pass
-
-    if reaction.emoji == '💾':
-        # Check if the user is the owner of the room
-        if rooms.get(channel.id) != user.id:
-            print("User is not the owner of the room")
-            return
-        # Add functionality for '💾' reaction here
-        owner = user
-        message = reaction.message
-        reactions = message.reactions
-        emoji_order = ['🔒', '🎮', '📋', '🌴', '🔞', '⏱', '🎉', '🎙️', '🃏', '📺', '💻', '🔊', '🔉', '🔈']
-        emoji_priority = {emoji: i for i, emoji in enumerate(emoji_order)}
-        emoji_name_list = sorted([(react.emoji, emoji_priority.get(react.emoji, float('inf'))) for react in reactions if owner in await react.users().flatten() and react.emoji != '💾'], key=lambda x: x[1])
-
-        # Only add '👽' if no other emojis were used
-        if emoji_name_list:
-            channel_name = channel.name.replace('👽', '').strip()
-        else:
-            channel_name = channel.name
-
-        new_channel_name = ''.join(emoji for emoji, _ in emoji_name_list) + '' + channel_name
-        await channel.edit(name=new_channel_name)
-        await channel.send(f'{user.mention} you have updated the room name')
-
-    if reaction.emoji == '💻':
-        if rooms.get(channel.id) != user.id:
-            print("User is not the owner of the room")
-            await channel.send(f'{user.mention} you are not the owner of the room')
-            for react in reaction.message.reactions:
-                if react.emoji == '💻':  
-                    await react.remove(user)  
-            return
-        # Add functionality for '💻' reaction here
-        # await channel.edit(name=f'💻 {channel.name}')
-        general_access_role_id = 1070344422799200306  
-        general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
-        # Get the current permissions of the role in the channel
-        permissions = channel.overwrites_for(general_access_role)
-        # Modify the specific permission
-        permissions.update(stream=True)
-        # Set the permissions back
-        await channel.set_permissions(general_access_role, overwrite=permissions)
-        await channel.send(f'{user.mention} you have updated the room permissions')
-        pass
-
-    if reaction.emoji == '🔈':
-        # Check if the user is the owner of the room
-        if discord.utils.get(user.roles, id=1129504850028269578) is not None:
-            print("User is missing the supporter role")
-            await channel.send(f'{user.mention} you are missing the supporter role')
-            for react in reaction.message.reactions:
-                if react.emoji == '🔈':  # Replace with your specific emoji
-                    await react.remove(user)  # Remove the reaction of the user 'user'
-            return
-        # Add functionality for '🔈' reaction here
-        await channel.edit(bitrate=128000)
-        await channel.send(f'{user.mention} you have changed the audio quality to 128 kbps')
-        pass
-
-    if reaction.emoji == '🔉':
-        # Check if the user is the owner of the room
-        if discord.utils.get(user.roles, id=1077208333024497674) is not None:
-            print("User is missing the supporter+ role")
-            await channel.send(f'{user.mention} you are missing the supporter+ role')
-            for react in reaction.message.reactions:
-                if react.emoji == '🔉':
-                    await react.remove(user)
-            return
-        # Add functionality for '🔉' reaction here
-        await channel.edit(bitrate=256000)
-        await channel.send(f'{user.mention} you have changed the audio quality to 256 kbps')
-        pass
-
-    if reaction.emoji == '🔊':
-        # Check if the user is the owner of the room
-        if discord.utils.get(user.roles, id=1129505458147831808) is not None:
-            print("User is missing the super supporter role")
-            await channel.send(f'{user.mention} you are missing the super supporter role')
-            for react in reaction.message.reactions:
-                if react.emoji == '🔊':
-                    await react.remove(user)
-            return
-        # Add functionality for '🔊' reaction here
-        await channel.edit(bitrate=384000)
-        await channel.send(f'{user.mention} you have changed the audio quality to 384 kbps')
-        pass
-
+    if reaction.emoji in reaction_handlers:
+        await reaction_handlers[reaction.emoji](reaction, user)
 
 #--------------------------------------#
-#           On Reaction Remove         #
+#           On reaction remove         #
 #--------------------------------------#
-@bot.event
 async def on_reaction_remove(reaction, user):
     channel = reaction.message.channel
     if not isinstance(channel, discord.VoiceChannel):
         return
 
-    if reaction.emoji == '🎮':
-        await channel.edit(name=channel.name.replace(' 🎮', ''))
-        # Add functionality for '🎮' reaction here
-    if reaction.emoji == '🔒':
-        await channel.edit(name=channel.name.replace(' 🔒', ''))
-        # Add functionality for '🔒' reaction here
-    if reaction.emoji == '🌴':
-        await channel.edit(name=channel.name.replace(' 🌴', ''))
-        # Add functionality for '🌴' reaction here
-    if reaction.emoji == '🔞':
-        await channel.edit(name=channel.name.replace(' 🔞', ''))
-        # Add functionality for '🔞' reaction here
-    if reaction.emoji == '⏱':
-        await channel.edit(name=channel.name.replace(' ⏱', ''))
-        # Add functionality for '⏱' reaction here
-    if reaction.emoji == '🎉':
-        await channel.edit(name=channel.name.replace(' 🎉', ''))
-        # Add functionality for '🎉' reaction here
-    if reaction.emoji == '🎙️':
-        await channel.edit(name=channel.name.replace(' 🎙️', ''))
-        # Add functionality for '🎙️' reaction here
-    if reaction.emoji == '🃏':
-        await channel.edit(name=channel.name.replace(' 🃏', ''))
-        # Add functionality for '🃏' reaction here
+    reaction_handlers = {
+        '🔒': remove_handle_lock,
+        '🌴': remove_handle_palm_tree,
+        '🔞': remove_handle_adult_content,
+        '⏱': remove_handle_timer,
+        '🎉': remove_handle_party,
+        '🎙️': remove_handle_microphone,
+        '🃏': remove_handle_card_game,
+        '📺': remove_handle_tv,
+        '🔈': remove_handle_volume_down,
+        '🔉': remove_handle_volume_medium,
+        '🔊': remove_handle_volume_up,
+        '💻': remove_handle_computer,
+        '💾': remove_handle_save,
+        '📋': remove_handle_clipboard,
+        '🎮': remove_handle_video_game,
+    }
 
+    if reaction.emoji in reaction_handlers:
+        await reaction_handlers[reaction.emoji](reaction, user)
 
-    if reaction.emoji == '📺':
-        await channel.edit(name=channel.name.replace(' 📺', ''))
-        # Add functionality for '📺' reaction here
-        general_access_role_id = 1070344422799200306
-        general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
-        permissions = channel.overwrites_for(general_access_role)
-        # Reset the 'speak' permission
-        permissions.update(speak=True)
-        await channel.set_permissions(general_access_role, overwrite=permissions)
-        await channel.send(f'{user.mention} you have reverted the room permissions users can now speak')
+#--------------------------------------#
+#         reaction add functions       #
+#--------------------------------------#
+# 🌴 Add Reaction Function
+async def handle_palm_tree(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🌴 reaction
 
-    if reaction.emoji == '💻':
-        channel = reaction.message.channel
-        if rooms.get(channel.id) != user.id:
-            print("User is not the owner of the room")
-            await channel.send(f'{user.mention} you are not the owner of the room')
-            return
-        # Remove '💻' from the channel name
-        new_name = channel.name.replace('💻', '').strip()
-        await channel.edit(name=new_name)
-        general_access_role_id = 1070344422799200306
-        general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
-        permissions = channel.overwrites_for(general_access_role)
-        # Reset the 'stream' permission
-        permissions.update(stream=None)
-        await channel.set_permissions(general_access_role, overwrite=permissions)
-        await channel.send(f'{user.mention} you have reverted the room permissions')
+# 🔞 Add Reaction Function
+async def handle_adult_content(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🔞 reaction
 
-# sound settings
-    if reaction.emoji == '🔈':
-        if discord.utils.get(user.roles, id=1129504850028269578) is not None:
-            await channel.edit(bitrate=64000)
-            # Add additional functionality for '🔈' reaction here
-    if reaction.emoji == '🔉':
-        if discord.utils.get(user.roles, id=1077208333024497674) is not None:
-            await channel.edit(bitrate=64000)
-            # Add additional functionality for '🔉' reaction here
-    if reaction.emoji == '🔊':
-        if discord.utils.get(user.roles, id=1129505458147831808) is not None:
-            await channel.edit(bitrate=64000)
-            # Add additional functionality for '🔊' reaction here
+# ⏱ Add Reaction Function
+async def handle_timer(reaction, user):
+    channel = reaction.message.channel
+    # Add function to ⏱ reaction
+    await channel.edit(user_limit=5)
 
+# 🎉 Add Reaction Function
+async def handle_party(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🎉 reaction
 
+# 🎙️ Add Reaction Function
+async def handle_microphone(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🎙️ reaction
 
+# 🃏 Add Reaction Function
+async def handle_card_game(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🃏 reaction
+    embed = discord.Embed(
+        title="Game Resources",
+        description="Here are some links to online games you can play:",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="Cards Against Humanity", value="https://picturecards.online/static/index.html\nor use /cah packs then /cah create\n", inline=False)
+    embed.add_field(name="Random Common Card & Board Games", value="https://playingcards.io/games/\n", inline=False)
+    embed.add_field(name="Random Multiplayer Games", value="https://boardgamearena.com/lobby\n", inline=False)
+    embed.add_field(name="Games available:", value="Uno (called solo)\nYahtzee\nand much more", inline=False)
+    await channel.send(embed=embed)
+    pass
+
+# 📺 Add Reaction Function
+async def handle_tv(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 📺 reaction
+    # Get the role
+    general_access_role_id = 1070344422799200306
+    general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
+    # Get the current permissions of the role in the channel
+    permissions = channel.overwrites_for(general_access_role)
+    # Modify the 'speak' permission
+    permissions.update(speak=False)
+    # Apply the modified permissions
+    await channel.set_permissions(general_access_role, overwrite=permissions)
+
+# 🎮 Add Reaction Function
+async def handle_video_game(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🎮 reaction
+    creator = channel.guild.get_member(channel.guild.owner_id)
+    if creator is not None and creator.activities:
+        # await channel.edit(name=f'🎮' + channel.name)
+        creator_game = None
+        for activity in creator.activities:
+            if isinstance(activity, discord.Game):
+                creator_game = activity.name
+                break
+        if creator_game is not None:
+            overwrites = channel.overwrites
+            for member in channel.guild.members:
+                member_game = None
+                for activity in member.activities:
+                    if isinstance(activity, discord.Game):
+                        member_game = activity.name
+                        break
+                if member_game == creator_game:
+                    overwrites[member] = discord.PermissionOverwrite(connect=True)
+                else:
+                    overwrites[member] = discord.PermissionOverwrite(connect=False)
+            await channel.edit(overwrites=overwrites)
+            pass
+
+# 🔒 Add Reaction Function
+async def handle_lock(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🔒 reaction
+    everyone_role = discord.utils.get(channel.guild.roles, name='@everyone')
+    general_access_role_id = 1070344422799200306
+    general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
+    discord_mod_role_id = 578664579584753685
+    discord_mod_role = discord.utils.get(channel.guild.roles, id=discord_mod_role_id)
+    # Get the current permissions of the roles in the channel
+    everyone_permissions = channel.overwrites_for(everyone_role)
+    general_access_permissions = channel.overwrites_for(general_access_role)
+    discord_mod_permissions = channel.overwrites_for(discord_mod_role)
+    # Modify the specific permissions
+    everyone_permissions.update(read_messages=False, view_channel=False, connect=False)
+    general_access_permissions.update(read_messages=False, view_channel=True, connect=False)
+    discord_mod_permissions.update(manage_messages=False, mute_members=False, deafen_members=False, move_members=False)
+    # Set the permissions back
+    await channel.set_permissions(everyone_role, overwrite=everyone_permissions)
+    await channel.set_permissions(general_access_role, overwrite=general_access_permissions)
+    await channel.set_permissions(discord_mod_role, overwrite=discord_mod_permissions)
+    await channel.send(f'{user.mention} you have locked the room')
+    pass
+ 
+# 💾 Add Reaction Function
+async def handle_save(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 💾 reaction
+    owner = user
+    message = reaction.message
+    reactions = message.reactions
+    emoji_order = ['🔒', '🎮', '📋', '🌴', '🔞', '⏱', '🎉', '🎙️', '🃏', '📺', '💻', '🔊', '🔉', '🔈']
+    emoji_priority = {emoji: i for i, emoji in enumerate(emoji_order)}
+    emoji_name_list = sorted([(react.emoji, emoji_priority.get(react.emoji, float('inf'))) for react in reactions if owner in await react.users().flatten() and react.emoji != '💾'], key=lambda x: x[1])
+    # Only add '👽' if no other emojis were used
+    if emoji_name_list:
+        channel_name = channel.name.replace('👽', '').strip()
+    else:
+        channel_name = channel.name
+    new_channel_name = ''.join(emoji for emoji, _ in emoji_name_list) + '' + channel_name
+    await channel.edit(name=new_channel_name)
+    await channel.send(f'{user.mention} you have updated the room name')
+
+# 💻 Add Reaction Function
+async def handle_computer(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 💻 reaction
+    general_access_role_id = 1070344422799200306  
+    general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
+    # Get the current permissions of the role in the channel
+    permissions = channel.overwrites_for(general_access_role)
+    # Modify the specific permission
+    permissions.update(stream=True)
+    # Set the permissions back
+    await channel.set_permissions(general_access_role, overwrite=permissions)
+    await channel.send(f'{user.mention} you have updated the room permissions')
+    pass
+
+# 🔈 Add Reaction Function
+async def handle_volume_down(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🔈 reaction
+    await channel.edit(bitrate=128000)
+    await channel.send(f'{user.mention} you have changed the audio quality to 128 kbps')
+
+# 🔉 Add Reaction Function
+async def handle_volume_medium(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🔉 reaction
+    await channel.edit(bitrate=256000)
+    await channel.send(f'{user.mention} you have changed the audio quality to 256 kbps')
+
+# 🔊 Add Reaction Function
+async def handle_volume_up(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🔊 reaction
+    await channel.edit(bitrate=384000)
+    await channel.send(f'{user.mention} you have changed the audio quality to 384 kbps')
+
+# 📋 Add Reaction Function
+async def handle_clipboard(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 📋 reaction
+
+#--------------------------------------#
+#     Reaction Remove functions        #
+#--------------------------------------#
+
+# 🌴 Remove
+async def remove_handle_palm_tree(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🌴 remove reaction
+
+# 🔞 Remove
+async def remove_handle_adult_content(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🔞 remove reaction
+
+# ⏱ Remove
+async def remove_handle_timer(reaction, user):
+    channel = reaction.message.channel
+    # Add function to ⏱ remove reaction
+
+# 🎉 Remove
+async def remove_handle_party(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🎉 remove reaction
+
+# 🎙️ Remove
+async def remove_handle_microphone(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🎙️ remove reaction
+
+# 🃏 Remove
+async def remove_handle_card_game(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🃏 remove reaction
+
+# 📺 Remove
+async def remove_handle_tv(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 📺 remove reaction
+
+# 🎮 Remove
+async def remove_handle_video_game(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🎮 remove reaction
+
+# 🔒 Remove
+async def remove_handle_lock(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🔒 remove reaction
+
+# 💾 Remove
+async def remove_handle_save(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 💾 remove reaction
+
+# 💻 Remove
+async def remove_handle_computer(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 💻 remove reaction
+
+# 🔈 Remove
+async def remove_handle_volume_down(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🔈 remove reaction
+
+# 🔉 Remove
+async def remove_handle_volume_medium(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🔉 remove reaction
+
+# 🔊 Remove
+async def remove_handle_volume_up(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🔊 remove reaction
+
+# 📋 Remove
+async def remove_handle_clipboard(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 📋 remove reaction
+
+#--------------------------------------#
+#             On Message               #
+#--------------------------------------#
 
 @bot.event
 async def on_ready():
