@@ -186,6 +186,10 @@ async def on_reaction_remove(reaction, user):
 #         reaction add functions       #
 #--------------------------------------#
 # A dictionary to store the pending changes for each channel
+general_access_role_id = 1070344422799200306
+discord_mod_role_id = 578664579584753685
+
+
 pending_changes = {}
 
 async def handle_palm_tree(reaction, user):
@@ -249,8 +253,7 @@ async def handle_card_game(reaction, user):
 async def handle_tv(reaction, user):
     channel = reaction.message.channel
     # Add function to 📺 reaction
-    general_access_role_id = 1070344422799200306
-    general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
+    general_access_role = discord.utils.get(channel.guild.roles, id=1070344422799200306)
     # Get the current permissions of the role in the channel
     permissions = channel.overwrites_for(general_access_role)
     # Modify the 'speak' permission
@@ -294,10 +297,8 @@ async def handle_lock(reaction, user):
     channel = reaction.message.channel
     # Add function to 🔒 reaction
     everyone_role = discord.utils.get(channel.guild.roles, name='@everyone')
-    general_access_role_id = 1070344422799200306
-    general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
-    discord_mod_role_id = 578664579584753685
-    discord_mod_role = discord.utils.get(channel.guild.roles, id=discord_mod_role_id)
+    general_access_role = discord.utils.get(channel.guild.roles, id=1070344422799200306)
+    discord_mod_role = discord.utils.get(channel.guild.roles, id=578664579584753685)
     # Get the current permissions of the roles in the channel
     everyone_permissions = channel.overwrites_for(everyone_role)
     general_access_permissions = channel.overwrites_for(general_access_role)
@@ -322,8 +323,7 @@ async def handle_lock(reaction, user):
 async def handle_computer(reaction, user):
     channel = reaction.message.channel
     # Add function to 💻 reaction
-    general_access_role_id = 1070344422799200306  
-    general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
+    general_access_role = discord.utils.get(channel.guild.roles, id=1070344422799200306)
     # Get the current permissions of the role in the channel
     permissions = channel.overwrites_for(general_access_role)
     # Modify the specific permission
@@ -346,13 +346,13 @@ async def handle_clipboard(reaction, user):
 async def handle_volume_up(reaction, user):
     channel = reaction.message.channel
     # Add function to 🔊 reaction
-    if discord.utils.get(user.roles, id=1129504850028269578) is not None:
+    if discord.utils.get(user.roles, id=1129504850028269578) is None:  # check if the user does not have the role
         print("User is missing the supporter role")
         await channel.send(f'{user.mention} you are missing the supporter role')
         for react in reaction.message.reactions:
             if react.emoji == '🔊':  # Replace with your specific emoji
                 await react.remove(user)  # Remove the reaction of the user 'user'
-        return
+        return  # make sure to return after this point if the user does not have the role
     # Prepare functionality for '🔊' reaction
     bitrate = 384000
     if channel.id not in pending_changes:
@@ -360,17 +360,18 @@ async def handle_volume_up(reaction, user):
     pending_changes[channel.id]['bitrate'] = bitrate
     pending_changes[channel.id]['bitrate_message'] = f'{user.mention} you have changed the audio quality to {bitrate/1000} kbps'
 
+
 # 🔉 Add Reaction Function
 async def handle_volume_medium(reaction, user):
     channel = reaction.message.channel
     # Add function to 🔉 reaction
-    if discord.utils.get(user.roles, id=1077208333024497674) is not None:
+    if discord.utils.get(user.roles, id=1077208333024497674) is None:  # check if the user does not have the role
         print("User is missing the supporter+ role")
         await channel.send(f'{user.mention} you are missing the supporter+ role')
         for react in reaction.message.reactions:
             if react.emoji == '🔉':
                 await react.remove(user)
-        return
+        return  # make sure to return after this point if the user does not have the role
     # Prepare functionality for '🔉' reaction
     bitrate = 256000
     if channel.id not in pending_changes:
@@ -382,13 +383,13 @@ async def handle_volume_medium(reaction, user):
 async def handle_volume_down(reaction, user):
     channel = reaction.message.channel
     # Add function to 🔈 reaction
-    if discord.utils.get(user.roles, id=1129504850028269578) is not None:
+    if discord.utils.get(user.roles, id=1129504850028269578) is None:  # check if the user does not have the role
         print("User is missing the supporter role")
         await channel.send(f'{user.mention} you are missing the supporter role')
         for react in reaction.message.reactions:
             if react.emoji == '🔈':  # Replace with your specific emoji
                 await react.remove(user)  # Remove the reaction of the user 'user'
-        return
+        return  # make sure to return after this point if the user does not have the role
     # Prepare functionality for '🔈' reaction
     bitrate = 128000
     if channel.id not in pending_changes:
