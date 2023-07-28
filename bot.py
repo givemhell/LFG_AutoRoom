@@ -39,7 +39,7 @@ async def on_voice_state_update(member, before, after):
     # When a user leaves a channel
     if before.channel is not None and after.channel is None:
         if before.channel.id in rooms and rooms[before.channel.id] == member.id:
-            await asyncio.sleep(30)  # Wait for 30sec
+#            await asyncio.sleep(30)  # Wait for 30sec
             if before.channel.members == []:
                 await before.channel.delete()
                 del rooms[before.channel.id]
@@ -88,8 +88,8 @@ async def on_voice_state_update(member, before, after):
         embed.add_field(name='Lock Room Presets',
                         value='you can skip these if none apply\n'
                               '🔒 - Lock Everyone Out\n'
-                              '🎮 - Lock Room By Game\n'
-                              '📋 - Enable whitelist\n\n', inline=False)
+                              '🎮 - Lock Room By Game\n\n', inline=False)
+#                              '📋 - Enable whitelist\n\n', inline=False)
 
         embed.add_field(name='Audio Quality',
                         value='set the audio quality\n'
@@ -99,8 +99,8 @@ async def on_voice_state_update(member, before, after):
 
         embed.add_field(name='Feature Control Panel',
                         value='set features for your room\n'
-                              '💻 - Screen sharing & Camera\n'
-                              '💾 - Update room name (will take some time)\n\n', inline=False)
+                              '💻 - Enable Screen sharing & Camera\n'
+                              '💾 - Save & Apply Room Settings\n\n', inline=False)
 
         message = await new_channel.send(embed=embed)
         emojis = ['🌴', '🔞', '⏱', '🎉', '🎙️', '🃏', '📺', '🔒', '🎮', '📋', '🔈', '🔉', '🔊', '💻', '💾']
@@ -185,31 +185,48 @@ async def on_reaction_remove(reaction, user):
 #--------------------------------------#
 #         reaction add functions       #
 #--------------------------------------#
-# 🌴 Add Reaction Function
+# A dictionary to store the pending changes for each channel
+pending_changes = {}
+
 async def handle_palm_tree(reaction, user):
     channel = reaction.message.channel
     # Add function to 🌴 reaction
 
-# 🔞 Add Reaction Function
+    # Check if the 🔞 reaction is already present
+    for react in reaction.message.reactions:
+        if react.emoji == '🔞' and user in await react.users().flatten():
+            # Remove the 🔞 reaction
+            await reaction.message.remove_reaction('🔞', user)
+
 async def handle_adult_content(reaction, user):
     channel = reaction.message.channel
     # Add function to 🔞 reaction
+
+    # Check if the 🌴 reaction is already present
+    for react in reaction.message.reactions:
+        if react.emoji == '🌴' and user in await react.users().flatten():
+            # Remove the 🌴 reaction
+            await reaction.message.remove_reaction('🌴', user)
 
 # ⏱ Add Reaction Function
 async def handle_timer(reaction, user):
     channel = reaction.message.channel
     # Add function to ⏱ reaction
-    await channel.edit(user_limit=5)
+    if channel.id not in pending_changes:
+        pending_changes[channel.id] = {}
+    pending_changes[channel.id]['user_limit'] = 5
 
 # 🎉 Add Reaction Function
 async def handle_party(reaction, user):
     channel = reaction.message.channel
     # Add function to 🎉 reaction
+    pass
 
 # 🎙️ Add Reaction Function
 async def handle_microphone(reaction, user):
     channel = reaction.message.channel
     # Add function to 🎙️ reaction
+    pass
 
 # 🃏 Add Reaction Function
 async def handle_card_game(reaction, user):
@@ -224,14 +241,14 @@ async def handle_card_game(reaction, user):
     embed.add_field(name="Random Common Card & Board Games", value="https://playingcards.io/games/\n", inline=False)
     embed.add_field(name="Random Multiplayer Games", value="https://boardgamearena.com/lobby\n", inline=False)
     embed.add_field(name="Games available:", value="Uno (called solo)\nYahtzee\nand much more", inline=False)
-    await channel.send(embed=embed)
-    pass
+    if channel.id not in pending_changes:
+        pending_changes[channel.id] = {}
+    pending_changes[channel.id]['embed'] = embed
 
 # 📺 Add Reaction Function
 async def handle_tv(reaction, user):
     channel = reaction.message.channel
     # Add function to 📺 reaction
-    # Get the role
     general_access_role_id = 1070344422799200306
     general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
     # Get the current permissions of the role in the channel
@@ -239,7 +256,10 @@ async def handle_tv(reaction, user):
     # Modify the 'speak' permission
     permissions.update(speak=False)
     # Apply the modified permissions
-    await channel.set_permissions(general_access_role, overwrite=permissions)
+    if channel.id not in pending_changes:
+        pending_changes[channel.id] = {}
+    pending_changes[channel.id]['permissions'] = permissions
+    pending_changes[channel.id]['general_access_role'] = general_access_role
 
 # 🎮 Add Reaction Function
 async def handle_video_game(reaction, user):
@@ -247,7 +267,6 @@ async def handle_video_game(reaction, user):
     # Add function to 🎮 reaction
     creator = channel.guild.get_member(channel.guild.owner_id)
     if creator is not None and creator.activities:
-        # await channel.edit(name=f'🎮' + channel.name)
         creator_game = None
         for activity in creator.activities:
             if isinstance(activity, discord.Game):
@@ -265,7 +284,9 @@ async def handle_video_game(reaction, user):
                     overwrites[member] = discord.PermissionOverwrite(connect=True)
                 else:
                     overwrites[member] = discord.PermissionOverwrite(connect=False)
-            await channel.edit(overwrites=overwrites)
+            if channel.id not in pending_changes:
+                pending_changes[channel.id] = {}
+            pending_changes[channel.id]['overwrites'] = overwrites
             pass
 
 # 🔒 Add Reaction Function
@@ -286,12 +307,95 @@ async def handle_lock(reaction, user):
     general_access_permissions.update(read_messages=False, view_channel=True, connect=False)
     discord_mod_permissions.update(manage_messages=False, mute_members=False, deafen_members=False, move_members=False)
     # Set the permissions back
-    await channel.set_permissions(everyone_role, overwrite=everyone_permissions)
-    await channel.set_permissions(general_access_role, overwrite=general_access_permissions)
-    await channel.set_permissions(discord_mod_role, overwrite=discord_mod_permissions)
-    await channel.send(f'{user.mention} you have locked the room')
+    if channel.id not in pending_changes:
+        pending_changes[channel.id] = {}
+    pending_changes[channel.id]['everyone_permissions'] = everyone_permissions
+    pending_changes[channel.id]['general_access_permissions'] = general_access_permissions
+    pending_changes[channel.id]['discord_mod_permissions'] = discord_mod_permissions
+    pending_changes[channel.id]['everyone_role'] = everyone_role
+    pending_changes[channel.id]['general_access_role'] = general_access_role
+    pending_changes[channel.id]['discord_mod_role'] = discord_mod_role
+    pending_changes[channel.id]['lock_message'] = f'{user.mention} you have locked the room'
     pass
- 
+
+# 💻 Add Reaction Function
+async def handle_computer(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 💻 reaction
+    general_access_role_id = 1070344422799200306  
+    general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
+    # Get the current permissions of the role in the channel
+    permissions = channel.overwrites_for(general_access_role)
+    # Modify the specific permission
+    permissions.update(stream=True)
+    # Set the permissions back
+    if channel.id not in pending_changes:
+        pending_changes[channel.id] = {}
+    pending_changes[channel.id]['permissions'] = permissions
+    pending_changes[channel.id]['general_access_role'] = general_access_role
+    pending_changes[channel.id]['computer_message'] = f'{user.mention} you have updated the room permissions'
+    pass
+
+# 📋 Add Reaction Function
+async def handle_clipboard(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 📋 reaction
+    pass
+
+# 🔊 Add Reaction Function
+async def handle_volume_up(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🔊 reaction
+    if discord.utils.get(user.roles, id=1129504850028269578) is not None:
+        print("User is missing the supporter role")
+        await channel.send(f'{user.mention} you are missing the supporter role')
+        for react in reaction.message.reactions:
+            if react.emoji == '🔊':  # Replace with your specific emoji
+                await react.remove(user)  # Remove the reaction of the user 'user'
+        return
+    # Prepare functionality for '🔊' reaction
+    bitrate = 384000
+    if channel.id not in pending_changes:
+        pending_changes[channel.id] = {}
+    pending_changes[channel.id]['bitrate'] = bitrate
+    pending_changes[channel.id]['bitrate_message'] = f'{user.mention} you have changed the audio quality to {bitrate/1000} kbps'
+
+# 🔉 Add Reaction Function
+async def handle_volume_medium(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🔉 reaction
+    if discord.utils.get(user.roles, id=1077208333024497674) is not None:
+        print("User is missing the supporter+ role")
+        await channel.send(f'{user.mention} you are missing the supporter+ role')
+        for react in reaction.message.reactions:
+            if react.emoji == '🔉':
+                await react.remove(user)
+        return
+    # Prepare functionality for '🔉' reaction
+    bitrate = 256000
+    if channel.id not in pending_changes:
+        pending_changes[channel.id] = {}
+    pending_changes[channel.id]['bitrate'] = bitrate
+    pending_changes[channel.id]['bitrate_message'] = f'{user.mention} you have changed the audio quality to {bitrate/1000} kbps'
+
+# 🔈 Add Reaction Function
+async def handle_volume_down(reaction, user):
+    channel = reaction.message.channel
+    # Add function to 🔈 reaction
+    if discord.utils.get(user.roles, id=1129504850028269578) is not None:
+        print("User is missing the supporter role")
+        await channel.send(f'{user.mention} you are missing the supporter role')
+        for react in reaction.message.reactions:
+            if react.emoji == '🔈':  # Replace with your specific emoji
+                await react.remove(user)  # Remove the reaction of the user 'user'
+        return
+    # Prepare functionality for '🔈' reaction
+    bitrate = 128000
+    if channel.id not in pending_changes:
+        pending_changes[channel.id] = {}
+    pending_changes[channel.id]['bitrate'] = bitrate
+    pending_changes[channel.id]['bitrate_message'] = f'{user.mention} you have changed the audio quality to {bitrate/1000} kbps'
+
 # 💾 Add Reaction Function
 async def handle_save(reaction, user):
     channel = reaction.message.channel
@@ -308,49 +412,41 @@ async def handle_save(reaction, user):
     else:
         channel_name = channel.name
     new_channel_name = ''.join(emoji for emoji, _ in emoji_name_list) + '' + channel_name
+
+    # Apply the pending changes (if any)
+    if channel.id in pending_changes:
+        changes = pending_changes[channel.id]
+        if 'user_limit' in changes:
+            await channel.edit(user_limit=changes['user_limit'])
+        if 'embed' in changes:
+            await channel.send(embed=changes['embed'])
+        if 'permissions' in changes and 'general_access_role' in changes:
+            await channel.set_permissions(changes['general_access_role'], overwrite=changes['permissions'])
+        if 'overwrites' in changes:
+            await channel.edit(overwrites=changes['overwrites'])
+        if 'everyone_permissions' in changes and 'everyone_role' in changes:
+            await channel.set_permissions(changes['everyone_role'], overwrite=changes['everyone_permissions'])
+        if 'general_access_permissions' in changes and 'general_access_role' in changes:
+            await channel.set_permissions(changes['general_access_role'], overwrite=changes['general_access_permissions'])
+        if 'discord_mod_permissions' in changes and 'discord_mod_role' in changes:
+            await channel.set_permissions(changes['discord_mod_role'], overwrite=changes['discord_mod_permissions'])
+        if 'computer_message' in changes:
+            await channel.send(changes['computer_message'])
+        if 'lock_message' in changes:
+            await channel.send(changes['lock_message'])
+        if 'general_access_role' in changes and 'permissions' in changes:
+            await channel.set_permissions(changes['general_access_role'], overwrite=changes['permissions'])
+        if 'bitrate' in changes:
+            await channel.edit(bitrate=changes['bitrate'])
+        if 'bitrate_message' in changes:
+            await channel.send(changes['bitrate_message'])
+        # Clear the pending changes for this channel
+        del pending_changes[channel.id]
+        
+    # Continue with the rest of the function
     await channel.edit(name=new_channel_name)
-    await channel.send(f'{user.mention} you have updated the room name')
+    await channel.send(f'{user.mention} you have updated the room with changes')
 
-# 💻 Add Reaction Function
-async def handle_computer(reaction, user):
-    channel = reaction.message.channel
-    # Add function to 💻 reaction
-    general_access_role_id = 1070344422799200306  
-    general_access_role = discord.utils.get(channel.guild.roles, id=general_access_role_id)
-    # Get the current permissions of the role in the channel
-    permissions = channel.overwrites_for(general_access_role)
-    # Modify the specific permission
-    permissions.update(stream=True)
-    # Set the permissions back
-    await channel.set_permissions(general_access_role, overwrite=permissions)
-    await channel.send(f'{user.mention} you have updated the room permissions')
-    pass
-
-# 🔈 Add Reaction Function
-async def handle_volume_down(reaction, user):
-    channel = reaction.message.channel
-    # Add function to 🔈 reaction
-    await channel.edit(bitrate=128000)
-    await channel.send(f'{user.mention} you have changed the audio quality to 128 kbps')
-
-# 🔉 Add Reaction Function
-async def handle_volume_medium(reaction, user):
-    channel = reaction.message.channel
-    # Add function to 🔉 reaction
-    await channel.edit(bitrate=256000)
-    await channel.send(f'{user.mention} you have changed the audio quality to 256 kbps')
-
-# 🔊 Add Reaction Function
-async def handle_volume_up(reaction, user):
-    channel = reaction.message.channel
-    # Add function to 🔊 reaction
-    await channel.edit(bitrate=384000)
-    await channel.send(f'{user.mention} you have changed the audio quality to 384 kbps')
-
-# 📋 Add Reaction Function
-async def handle_clipboard(reaction, user):
-    channel = reaction.message.channel
-    # Add function to 📋 reaction
 
 #--------------------------------------#
 #     Reaction Remove functions        #
