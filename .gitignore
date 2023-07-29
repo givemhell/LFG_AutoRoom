@@ -2,3 +2,4 @@
 bot_token.txt
 rooms.json
 *.pem
+room_settings.json

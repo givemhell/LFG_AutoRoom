@@ -30,6 +30,13 @@ if os.path.exists('blacklist_data.json'):
 else:
     blacklist_data = {}
 
+def load_data():
+    global room_settings
+    if os.path.exists('room_settings.json'):
+        with open('room_settings.json', 'r') as f:
+            # Convert lists back to sets after loading
+            loaded_room_settings = json.load(f)
+            room_settings = {int(user_id): {key: set(value) if isinstance(value, list) else value for key, value in settings.items()} for user_id, settings in loaded_room_settings.items()}
 
 @bot.event
 async def on_voice_state_update(member, before, after):
@@ -39,22 +46,29 @@ async def on_voice_state_update(member, before, after):
     # When a user leaves a channel
     if before.channel is not None and after.channel is None:
         if before.channel.id in rooms and rooms[before.channel.id] == member.id:
-#            await asyncio.sleep(30)  # Wait for 30sec
-            if before.channel.members == []:
+            # await asyncio.sleep(30)  # Wait for 30sec
+            if len(before.channel.members) == 0:
                 await before.channel.delete()
                 del rooms[before.channel.id]
 
     # Do something when a user joins a '🛸' channel
     elif after.channel and '🛸' in after.channel.name:
-        # Get the permission overwrites from the 🛸 channel
-        overwrites = after.channel.overwrites
-        # Get the blacklisted users
-        blacklist = blacklist_data.get(member.id, set())
-        for blacklisted_user_id in blacklist:
-            blacklisted_member = discord.utils.get(member.guild.members, id=blacklisted_user_id)
-            if blacklisted_member:  # Ensure the member was found
-                overwrites[blacklisted_member] = discord.PermissionOverwrite(connect=False)
-
+        overwrites = {**after.channel.overwrites}  # Copy the permission overwrites from the 🛸 channel
+        if member.id in room_settings:
+            settings = room_settings[member.id]
+            # Apply the whitelist
+            if settings["whitelist_enabled"]:
+                for user_id in settings["whitelist"]:
+                    user = member.guild.get_member(user_id)
+                    if user:
+                        overwrites[user] = discord.PermissionOverwrite(connect=True)
+            # Apply the blacklist
+            if settings["blacklist_enabled"]:
+                for user_id in settings["blacklist"]:
+                    user = member.guild.get_member(user_id)
+                    if user:
+                        overwrites[user] = discord.PermissionOverwrite(connect=False)
+        
         new_channel = await after.channel.category.create_voice_channel(
             name=f'👽┃{member.nick if member.nick else member.name}\'s room',
             user_limit=after.channel.user_limit,
@@ -62,8 +76,8 @@ async def on_voice_state_update(member, before, after):
         )
 
         await member.move_to(new_channel)
-
         rooms[new_channel.id] = member.id
+
 
         # Create the main embed message
         embed = discord.Embed(
@@ -186,8 +200,6 @@ async def on_reaction_remove(reaction, user):
 #         reaction add functions       #
 #--------------------------------------#
 # A dictionary to store the pending changes for each channel
-general_access_role_id = 1070344422799200306
-discord_mod_role_id = 578664579584753685
 
 
 pending_changes = {}
@@ -414,6 +426,11 @@ async def handle_save(reaction, user):
         channel_name = channel.name
     new_channel_name = ''.join(emoji for emoji, _ in emoji_name_list) + '' + channel_name
 
+
+    # Set default user limit to 0 if not in changes
+    if channel.id not in pending_changes or 'user_limit' not in pending_changes[channel.id]:
+        await channel.edit(user_limit=0)
+
     # Apply the pending changes (if any)
     if channel.id in pending_changes:
         changes = pending_changes[channel.id]
@@ -529,8 +546,136 @@ async def remove_handle_clipboard(reaction, user):
     # Add function to 📋 remove reaction
 
 #--------------------------------------#
-#             On Message               #
+#            Slash Commands            #
 #--------------------------------------#
+room_settings = {}
+
+def save_data():
+    with open('room_settings.json', 'w') as f:
+        # Convert sets to lists before saving
+        save_room_settings = {user_id: {key: list(value) if isinstance(value, set) else value for key, value in settings.items()} for user_id, settings in room_settings.items()}
+        json.dump(save_room_settings, f)
+
+#--------------------------------------#
+#           Whitelist Commands         #
+#--------------------------------------#
+
+@bot.slash_command(name="whitelist_add", description="Add a user or role to your whitelist")
+async def whitelist_add(ctx, user: discord.Member):
+    if ctx.author.id not in room_settings:
+        room_settings[ctx.author.id] = {"whitelist": set(), "blacklist": set(), "whitelist_enabled": False, "blacklist_enabled": False}
+    room_settings[ctx.author.id]["whitelist"].add(user.id)
+    await ctx.send(f"{user.mention} has been added to your whitelist.")
+    save_data()
+
+@bot.slash_command(name="whitelist_remove", description="Remove a user or role from your whitelist")
+async def whitelist_remove(ctx, user: discord.Member):
+    if ctx.author.id in room_settings and user.id in room_settings[ctx.author.id]["whitelist"]:
+        room_settings[ctx.author.id]["whitelist"].remove(user.id)
+        await ctx.send(f"{user.mention} has been removed from your whitelist.")
+    save_data()
+
+@bot.slash_command(name="whitelist_enable", description="Enable your whitelist for your room")
+async def whitelist_enable(ctx):
+    if ctx.author.id not in room_settings:
+        room_settings[ctx.author.id] = {"whitelist": set(), "blacklist": set(), "whitelist_enabled": False, "blacklist_enabled": False}
+    room_settings[ctx.author.id]["whitelist_enabled"] = True
+    await ctx.send("Your whitelist has been enabled.")
+    save_data()
+
+@bot.slash_command(name="whitelist_disable", description="Disable your whitelist for your room")
+async def whitelist_disable(ctx):
+    if ctx.author.id in room_settings:
+        room_settings[ctx.author.id]["whitelist_enabled"] = False
+        await ctx.send("Your whitelist has been disabled.")
+    save_data()
+
+@bot.slash_command(name="whitelist_clear", description="Clear your whitelist of all users and roles")
+async def whitelist_clear(ctx):
+    if ctx.author.id in room_settings:
+        room_settings[ctx.author.id]["whitelist"] = set()
+        await ctx.send("Your whitelist has been cleared.")
+    save_data()
+
+#--------------------------------------#
+#           Blacklist Commands         #
+#--------------------------------------#
+@bot.slash_command(name="blacklist_add", description="Add a user or role to your blacklist")
+async def blacklist_add(ctx, user: discord.Member):
+    if ctx.author.id not in room_settings:
+        room_settings[ctx.author.id] = {"whitelist": set(), "blacklist": set(), "whitelist_enabled": False, "blacklist_enabled": False}
+    room_settings[ctx.author.id]["blacklist"].add(user.id)
+    await ctx.send(f"{user.mention} has been added to your blacklist.")
+    save_data()
+
+@bot.slash_command(name="blacklist_remove", description="Remove a user or role from your blacklist")
+async def blacklist_remove(ctx, user: discord.Member):
+    if ctx.author.id in room_settings and user.id in room_settings[ctx.author.id]["blacklist"]:
+        room_settings[ctx.author.id]["blacklist"].remove(user.id)
+        await ctx.send(f"{user.mention} has been removed from your blacklist.")
+    save_data()
+
+@bot.slash_command(name="blacklist_enable", description="Enable your blacklist for your room")
+async def blacklist_enable(ctx):
+    if ctx.author.id not in room_settings:
+        room_settings[ctx.author.id] = {"whitelist": set(), "blacklist": set(), "whitelist_enabled": False, "blacklist_enabled": False}
+    room_settings[ctx.author.id]["blacklist_enabled"] = True
+    await ctx.send("Your blacklist has been enabled.")
+    save_data()
+
+@bot.slash_command(name="blacklist_disable", description="Disable your blacklist for your room")
+async def blacklist_disable(ctx):
+    if ctx.author.id in room_settings:
+        room_settings[ctx.author.id]["blacklist_enabled"] = False
+        await ctx.send("Your blacklist has been disabled.")
+    save_data()
+
+@bot.slash_command(name="blacklist_clear", description="Clear your blacklist of all users and roles")
+async def blacklist_clear(ctx):
+    if ctx.author.id in room_settings:
+        room_settings[ctx.author.id]["blacklist"] = set()
+        await ctx.send("Your blacklist has been cleared.")
+    save_data()
+
+#--------------------------------------#
+#           Allow/Deny Commands        #
+#--------------------------------------#
+
+@bot.slash_command(name="allow", description="Allow a user or role to join your room")
+async def allow(ctx, user: discord.Member):
+    if ctx.author.id not in room_settings:
+        room_settings[ctx.author.id] = {"whitelist": set(), "blacklist": set(), "allow": set(), "deny": set(), "whitelist_enabled": False, "blacklist_enabled": False}
+    room_settings[ctx.author.id]["allow"].add(user.id)
+    await ctx.send(f"{user.mention} has been allowed to join your room.")
+    save_data()
+
+@bot.slash_command(name="deny", description="Deny a user or role from joining your room")
+async def deny(ctx, user: discord.Member):
+    if ctx.author.id not in room_settings:
+        room_settings[ctx.author.id] = {"whitelist": set(), "blacklist": set(), "allow": set(), "deny": set(), "whitelist_enabled": False, "blacklist_enabled": False}
+    room_settings[ctx.author.id]["deny"].add(user.id)
+    await ctx.send(f"{user.mention} has been denied from joining your room.")
+    save_data()
+
+#--------------------------------------#
+#           Password Commands          #
+#--------------------------------------#
+@bot.slash_command(name="set_room_password", description="Set a password for your room")
+async def set_room_password(ctx, password: str):
+    if ctx.author.id not in room_settings:
+        room_settings[ctx.author.id] = {"whitelist": set(), "blacklist": set(), "allow": set(), "deny": set(), "whitelist_enabled": False, "blacklist_enabled": False}
+    room_settings[ctx.author.id]["password"] = password
+    await ctx.send("Password has been set for your room.")
+    save_data()
+
+@bot.slash_command(name="join", description="Join a locked room with a password")
+async def join(ctx, user: discord.Member, password: str):
+    if user.id in room_settings and "password" in room_settings[user.id] and room_settings[user.id]["password"] == password:
+        await ctx.send(f"{ctx.author.mention} has joined the room.")
+    else:
+        await ctx.send("Unable to join the room. Incorrect password.")
+
+
 
 @bot.event
 async def on_ready():
