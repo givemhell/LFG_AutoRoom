@@ -102,8 +102,8 @@ async def on_voice_state_update(member, before, after):
         embed.add_field(name='Lock Room Presets',
                         value='you can skip these if none apply\n'
                               '🔒 - Lock Everyone Out\n'
-                              '🎮 - Lock Room By Game\n\n', inline=False)
-#                              '📋 - Enable whitelist\n\n', inline=False)
+                              '🎮 - Lock Room By Game\n'
+                              '📋 - Enable/Disable whitelist\n\n', inline=False)
 
         embed.add_field(name='Audio Quality',
                         value='set the audio quality\n'
@@ -352,7 +352,17 @@ async def handle_computer(reaction, user):
 async def handle_clipboard(reaction, user):
     channel = reaction.message.channel
     # Add function to 📋 reaction
-    pass
+    if user.id not in room_settings:
+        room_settings[user.id] = {"whitelist": set(), "blacklist": set(), "whitelist_enabled": False, "blacklist_enabled": False}
+    room_settings[user.id]["whitelist_enabled"] = not room_settings[user.id]["whitelist_enabled"]  # Toggle the whitelist status
+    if channel.id not in pending_changes:
+        pending_changes[channel.id] = {}
+    pending_changes[channel.id]['whitelist_enabled'] = room_settings[user.id]["whitelist_enabled"]
+    if room_settings[user.id]["whitelist_enabled"]:
+        await channel.send(f'{user.mention} your whitelist will be enabled when you save.')
+    else:
+        await channel.send(f'{user.mention} your whitelist will be disabled when you save.')
+
 
 # 🔊 Add Reaction Function
 async def handle_volume_up(reaction, user):
@@ -418,7 +428,7 @@ async def handle_save(reaction, user):
     reactions = message.reactions
     emoji_order = ['🔒', '🎮', '📋', '🌴', '🔞', '⏱', '🎉', '🎙️', '🃏', '📺', '💻', '🔊', '🔉', '🔈']
     emoji_priority = {emoji: i for i, emoji in enumerate(emoji_order)}
-    emoji_name_list = sorted([(react.emoji, emoji_priority.get(react.emoji, float('inf'))) for react in reactions if owner in await react.users().flatten() and react.emoji != '💾'], key=lambda x: x[1])
+    emoji_name_list = sorted([(react.emoji, emoji_priority.get(react.emoji, float('inf'))) for react in reactions if owner in await react.users().flatten() and react.emoji not in ['💾', '📋']], key=lambda x: x[1])
     # Only add '👽' if no other emojis were used
     if emoji_name_list:
         channel_name = channel.name.replace('👽', '').strip()
@@ -458,12 +468,27 @@ async def handle_save(reaction, user):
             await channel.edit(bitrate=changes['bitrate'])
         if 'bitrate_message' in changes:
             await channel.send(changes['bitrate_message'])
+        if 'whitelist_enabled' in changes:
+            room_settings[channel.id]["whitelist_enabled"] = changes['whitelist_enabled']
+            if room_settings[channel.id]["whitelist_enabled"]:
+                # If whitelist is enabled, grant 'connect' permission to everyone on the whitelist
+                overwrites = {user.guild.get_member(user_id): discord.PermissionOverwrite(connect=True) for user_id in room_settings[channel.id]["whitelist"]}
+                await channel.edit(overwrites=overwrites)
+                await channel.send(f'{user.mention} your whitelist is now enabled.')
+            else:
+                # If whitelist is disabled, reset 'connect' permission
+                overwrites = {user.guild.get_member(user_id): discord.PermissionOverwrite(connect=None) for user_id in room_settings[channel.id]["whitelist"]}
+                await channel.edit(overwrites=overwrites)
+                await channel.send(f'{user.mention} your whitelist is now disabled.')
+                
         # Clear the pending changes for this channel
         del pending_changes[channel.id]
         
     # Continue with the rest of the function
     await channel.edit(name=new_channel_name)
     await channel.send(f'{user.mention} you have updated the room with changes')
+    # Clear the pending changes for this channel
+    del pending_changes[channel.id]
 
 
 #--------------------------------------#
