@@ -47,9 +47,18 @@ async def on_voice_state_update(member, before, after):
 
     # When a user leaves a channel
     if before.channel is not None and after.channel is None:
-        if before.channel.id in rooms and rooms[before.channel.id] == member.id:
-            # await asyncio.sleep(30)  # Wait for 30sec
-            if len(before.channel.members) == 0:
+        if before.channel.id in rooms and rooms[before.channel.id] == member.id:  # If the user leaving is the owner
+            remaining_members = before.channel.members
+            if remaining_members:  # If there are still members in the room
+                # Sort the members by top role's position (which is a measure of rank)
+                remaining_members.sort(key=lambda m: m.top_role.position, reverse=True)
+                new_owner = remaining_members[0]  # The highest ranked member is the new owner
+                rooms[before.channel.id] = new_owner.id  # Update the owner in the rooms dictionary
+                # Update the channel name here with the new owner's name
+                await before.channel.edit(name=f'👽┃{new_owner.nick if new_owner.nick else new_owner.name}\'s room')
+                # send a message to the voice chat the new owner
+                await before.channel.send(f'{new_owner.mention} you are now the owner of this room')
+            else:  # If no members left in the room
                 await before.channel.delete()
                 del rooms[before.channel.id]
 
@@ -716,7 +725,22 @@ async def join(ctx, user: discord.Member, password: str):
         await ctx.send("The user has not set a password for the room.")
 
 
+#----
+@bot.slash_command(name="copy_perms", description="Copy permissions from one channel to another")
+async def copy_perms(ctx, source_channel_id: str, target_channel_id: str):
+    source_channel = bot.get_channel(int(source_channel_id))
+    target_channel = bot.get_channel(int(target_channel_id))
 
+    if source_channel is None or target_channel is None:
+        await ctx.send(f"Could not find one or both of the channels. Please make sure the IDs are correct.")
+        return
+
+    # Copy permissions
+    for target in source_channel.overwrites:
+        perms = source_channel.overwrites_for(target)
+        await target_channel.set_permissions(target, overwrite=perms)
+
+    await ctx.send(f"Permissions have been copied from <#{source_channel.id}> to <#{target_channel.id}>.")
 
 
 @bot.event
