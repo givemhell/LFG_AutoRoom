@@ -728,6 +728,11 @@ async def join(ctx, user: discord.Member, password: str):
 #----
 @bot.slash_command(name="copy_perms", description="Copy permissions from one channel to another")
 async def copy_perms(ctx, source_channel_id: str, target_channel_id: str):
+    # Check if the command was invoked by the server owner
+    if ctx.author.id != ctx.guild.owner_id:
+        await ctx.send("You must be the server owner to use this command.")
+        return
+
     source_channel = bot.get_channel(int(source_channel_id))
     target_channel = bot.get_channel(int(target_channel_id))
 
