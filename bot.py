@@ -1,3 +1,4 @@
+import hashlib
 import json
 from typing import Union
 from discord.ext import commands
@@ -6,6 +7,7 @@ from discord import PermissionOverwrite
 import discord
 import os
 import asyncio
+import bcrypt
 
 intents = discord.Intents.default()
 intents.members = True
@@ -689,16 +691,31 @@ async def deny(ctx, user: discord.Member):
 async def set_room_password(ctx, password: str):
     if ctx.author.id not in room_settings:
         room_settings[ctx.author.id] = {"whitelist": set(), "blacklist": set(), "allow": set(), "deny": set(), "whitelist_enabled": False, "blacklist_enabled": False}
-    room_settings[ctx.author.id]["password"] = password
+    import bcrypt
+    room_settings[ctx.author.id]['password'] = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     await ctx.send("Password has been set for your room.")
     save_data()
 
+
 @bot.slash_command(name="join", description="Join a locked room with a password")
 async def join(ctx, user: discord.Member, password: str):
-    if user.id in room_settings and "password" in room_settings[user.id] and room_settings[user.id]["password"] == password:
-        await ctx.send(f"{ctx.author.mention} has joined the room.")
+    if user.id in room_settings and "password" in room_settings[user.id]:
+        hashed_password = room_settings[user.id]["password"].encode()
+        if bcrypt.checkpw(password.encode(), hashed_password):  # Verify the password using bcrypt
+            # Find the voice channel that the target user is in
+            voice_channel = user.voice.channel if user.voice else None
+            if voice_channel:
+                # Move the author to the voice channel
+                await ctx.author.move_to(voice_channel)
+                await ctx.send(f"{ctx.author.mention} has joined the room.")
+            else:
+                await ctx.send("The user is not in a voice channel.")
+        else:
+            await ctx.send("Unable to join the room. Incorrect password.")
     else:
-        await ctx.send("Unable to join the room. Incorrect password.")
+        await ctx.send("The user has not set a password for the room.")
+
+
 
 
 
