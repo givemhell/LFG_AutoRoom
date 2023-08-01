@@ -725,29 +725,6 @@ async def join(ctx, user: discord.Member, password: str):
         await ctx.send("The user has not set a password for the room.")
 
 
-#----
-@bot.slash_command(name="copy_perms", description="Copy permissions from one channel to another")
-async def copy_perms(ctx, source_channel_id: str, target_channel_id: str):
-    # Check if the command was invoked by the server owner
-    if ctx.author.id != ctx.guild.owner_id:
-        await ctx.send("You must be the server owner to use this command.")
-        return
-
-    source_channel = bot.get_channel(int(source_channel_id))
-    target_channel = bot.get_channel(int(target_channel_id))
-
-    if source_channel is None or target_channel is None:
-        await ctx.send(f"Could not find one or both of the channels. Please make sure the IDs are correct.")
-        return
-
-    # Copy permissions
-    for target in source_channel.overwrites:
-        perms = source_channel.overwrites_for(target)
-        await target_channel.set_permissions(target, overwrite=perms)
-
-    await ctx.send(f"Permissions have been copied from <#{source_channel.id}> to <#{target_channel.id}>.")
-
-
 @bot.event
 async def on_ready():
     print(f'{bot.user.name} has connected to Discord!')
