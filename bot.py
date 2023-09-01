@@ -728,83 +728,39 @@ async def join(ctx, user: discord.Member, password: str):
         await ctx.send("The user has not set a password for the room.")
 
 
-#----
-@bot.slash_command(name="xcopy_all_perms", description="Copy all permissions from one channel to another")
-async def xcopy_all_perms(ctx, source_channel_id: str, target_channel_id: str):
-    # Check if the command was invoked by the server owner
-    if ctx.author.id != ctx.guild.owner_id:
-        await ctx.send("You must be the server owner to use this command.")
-        return
-
-    source_channel = bot.get_channel(int(source_channel_id))
-    target_channel = bot.get_channel(int(target_channel_id))
-
-    if source_channel is None or target_channel is None:
-        await ctx.respond(f"Could not find one or both of the channels. Please make sure the IDs are correct.")
-        return
-
-    # Copy permissions
-    for target in source_channel.overwrites:
-        perms = source_channel.overwrites_for(target)
-        await target_channel.set_permissions(target, overwrite=perms)
-
-    await ctx.respond(f"Permissions have been copied from <#{source_channel.id}> to <#{target_channel.id}>.")
-
-
-@bot.slash_command(name="xcopy_role_perms", description="Copy permissions of a specific role from one channel to another")
-async def xcopy_role_perms(ctx, role: discord.Role, source_channel_id: str, target_channel_id: str):
-    # Check if the command was invoked by the server owner
-    if ctx.author.id != ctx.guild.owner_id:
-        await ctx.send("You must be the server owner to use this command.")
-        return
-
-    source_channel = bot.get_channel(int(source_channel_id))
-    target_channel = bot.get_channel(int(target_channel_id))
-
-    if source_channel is None or target_channel is None or role is None:
-        await ctx.respond(f"Could not find one or both of the channels. Please make sure the IDs are correct.")
-        return
-    
-    # Copy permissions
-    perms = source_channel.overwrites_for(role)
-    await target_channel.set_permissions(role, overwrite=perms)
-
-    await ctx.send("Channel names have been updated.")
-    
-
-
-@bot.slash_command(name="update_channel_names", description="Replace X with Y in all channel names")
-async def replace_channel_names(ctx):
-    # Check if the command was invoked by the server owner
-    if ctx.author.id != ctx.guild.owner_id:
-        await ctx.send("You must be the server owner to use this command.")
-        return
-
-    # Iterate over all channels in the server
-    for channel in ctx.guild.channels:
-        # Check if the channel is a category and if "▰" is in the channel name
-        if isinstance(channel, discord.CategoryChannel) and "▰" in channel.name:
-            new_name = channel.name.replace("▰", "▬")
-            # Edit the channel name
-            await channel.edit(name=new_name)
-
-    await ctx.send("Category names have been updated.")
-
-
-    await ctx.send("Channel names have been updated.")
-
-@bot.slash_command(name="moveall", description="Move all users from my channel to a specified channel")
-async def move_all(ctx, target_channel: discord.VoiceChannel):
-    # Check if the author has one of the allowed roles
+@bot.slash_command(name="massmove", description="Move all users with a specific role from any voice channel to a specified channel")
+async def massmove(ctx, role: discord.Role, target_channel: discord.VoiceChannel):
     if any(role.id in ALLOWED_ROLE_IDS for role in ctx.author.roles):
-        # Check if the author is in a voice channel
+        # Send an initial response
+        await ctx.respond(f"Starting to move all members with the {role.name} role to {target_channel.name}...")
+
+        for vc in ctx.guild.voice_channels:
+            for member in vc.members:
+                if role in member.roles:
+                    await member.move_to(target_channel)
+                    await asyncio.sleep(MOVE_DELAY)
+        
+        # Send a follow-up message when the command is complete
+        await ctx.respond(f"Moved all members with the {role.name} role to {target_channel.name}")
+    else:
+        await ctx.respond("You do not have the required role to use this command!")
+
+@bot.slash_command(name="moveus", description="Move all users with a specific role from the user's voice channel to a specified channel")
+async def moveus(ctx, role: discord.Role, target_channel: discord.VoiceChannel):
+    if any(role.id in ALLOWED_ROLE_IDS for role in ctx.author.roles):
         if ctx.author.voice and ctx.author.voice.channel:
             source_channel = ctx.author.voice.channel
-            for member in source_channel.members:
-                await member.move_to(target_channel)
-                await asyncio.sleep(MOVE_DELAY)  # Wait for the specified delay to respect rate limit
+            
+            # Send an initial response
+            await ctx.respond(f"Starting to move members with the {role.name} role from {source_channel.name} to {target_channel.name}...")
 
-            await ctx.respond(f"Moved all members from {source_channel.name} to {target_channel.name}")
+            for member in source_channel.members:
+                if role in member.roles:
+                    await member.move_to(target_channel)
+                    await asyncio.sleep(MOVE_DELAY)
+            
+            # Send a follow-up message when the command is complete
+            await ctx.respond(f"Moved members with the {role.name} role from {source_channel.name} to {target_channel.name}")
         else:
             await ctx.respond("You are not in a voice channel!")
     else:
