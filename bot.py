@@ -30,12 +30,13 @@ MOVE_DELAY = 0.5  # Time in seconds
 with open('bot_token.txt', 'r') as file:
     TOKEN = file.read().strip()
 
-# Load rooms
-if os.path.exists('rooms.json'):
+try:
     with open('rooms.json', 'r') as file:
         rooms = json.load(file)
-else:
+except (FileNotFoundError, json.JSONDecodeError):
     rooms = {}
+logging.info(f"Loaded rooms: {rooms}")
+
 
 # Load blacklist_data
 if os.path.exists('blacklist_data.json'):
@@ -43,6 +44,9 @@ if os.path.exists('blacklist_data.json'):
         blacklist_data = json.load(file)
 else:
     blacklist_data = {}
+
+def get_display_name(member):
+    return member.nick if member.nick else member.name
 
 def load_data():
     global room_settings
@@ -54,7 +58,7 @@ def load_data():
 
 @bot.event
 async def on_voice_state_update(member, before, after):
-    if member == bot.user:  # Ignore bot's own voice state updates
+    if member.bot:  # Ignore all bots  # Ignore bot's own voice state updates
         return
 
     # When a user leaves a channel
@@ -76,10 +80,10 @@ async def on_voice_state_update(member, before, after):
                 except Exception as e:
                     logging.error(f"Error deleting channel {before.channel.id}: {e}")
 
-
-
     # Do something when a user joins a '🛸' channel
     elif after.channel and '🛸' in after.channel.name:
+        # print the name of the user who joined the channel
+        print(f'{member.name} is creating a room')
         overwrites = {**after.channel.overwrites}  # Copy the permission overwrites from the 🛸 channel
         if member.id in room_settings:
             settings = room_settings[member.id]
@@ -95,9 +99,18 @@ async def on_voice_state_update(member, before, after):
                     user = member.guild.get_member(user_id)
                     if user:
                         overwrites[user] = discord.PermissionOverwrite(connect=False)
-        
+
+        base_name = f'👽┃{get_display_name(member)}\'s room'
+        channel_name = base_name
+        counter = 1
+
+        # Check if a channel with the desired name exists
+        while any(channel.name == channel_name for channel in after.channel.category.channels):
+            channel_name = f"{base_name} ({counter})"
+            counter += 1
+
         new_channel = await after.channel.category.create_voice_channel(
-            name=f'👽┃{member.nick if member.nick else member.name}\'s room',
+            name=channel_name,
             user_limit=after.channel.user_limit,
             overwrites=overwrites
         )
@@ -145,8 +158,16 @@ async def on_voice_state_update(member, before, after):
 
         message = await new_channel.send(embed=embed)
         emojis = ['🌴', '🔞', '⏱', '🎉', '🎙️', '🃏', '📺', '🔒', '🎮', '📋', '🔈', '🔉', '🔊', '💻', '💾']
-        for emoji in emojis:
-            await message.add_reaction(emoji)
+
+        async def add_single_reaction(message, emoji):
+            try:
+                await message.add_reaction(emoji)
+            except discord.errors.NotFound:
+                logging.warning(f"Channel {message.channel.id} not found when trying to add reaction {emoji}.")
+
+        await asyncio.gather(*(add_single_reaction(message, emoji) for emoji in emojis))
+
+
 
     try:
         with open('rooms.json', 'w') as file:
@@ -519,7 +540,9 @@ async def handle_save(reaction, user):
     await channel.edit(name=new_channel_name)
     await channel.send(f'{user.mention} you have updated the room with changes')
     # Clear the pending changes for this channel
-    del pending_changes[channel.id]
+    if channel.id in pending_changes:
+        del pending_changes[channel.id]
+
 
 
 #--------------------------------------#
@@ -797,5 +820,25 @@ async def move_us(ctx, role: discord.Role, target_channel: discord.VoiceChannel)
 @bot.event
 async def on_ready():
     print(f'{bot.user.name} has connected to Discord!')
+    global rooms
+    to_remove = []
+
+    for channel_id, owner_id in rooms.items():
+        channel = bot.get_channel(channel_id)
+        
+        # If the channel doesn't exist or is empty, mark it for removal
+        if channel is None or not channel.members:
+            to_remove.append(channel_id)
+
+    # Remove marked channels from the rooms dictionary
+    for channel_id in to_remove:
+        del rooms[channel_id]
+
+    # Optionally, save the updated rooms data to rooms.json
+    with open('rooms.json', 'w') as file:
+        json.dump(rooms, file)
+
+    print(f'{bot.user.name} has finished checking rooms!')
+
 
 bot.run(TOKEN)
