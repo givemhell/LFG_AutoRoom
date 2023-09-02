@@ -8,11 +8,20 @@ import discord
 import os
 import asyncio
 import bcrypt
+import logging
+
+
 
 intents = discord.Intents.default()
 intents.members = True
 
 bot = commands.Bot(command_prefix='/', intents=intents)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, 
+                    format='%(asctime)s - %(levelname)s - %(message)s', 
+                    filename='bot.log', 
+                    filemode='a')
 
 ALLOWED_ROLE_IDS = {578664576674168834, 578664579584753685}
 MOVE_DELAY = 0.5  # Time in seconds
@@ -62,8 +71,12 @@ async def on_voice_state_update(member, before, after):
                 # send a message to the voice chat the new owner
                 await before.channel.send(f'{new_owner.mention} you are now the owner of this room')
             else:  # If no members left in the room
-                await before.channel.delete()
-                del rooms[before.channel.id]
+                try:
+                    await before.channel.delete()
+                except Exception as e:
+                    logging.error(f"Error deleting channel {before.channel.id}: {e}")
+
+
 
     # Do something when a user joins a '🛸' channel
     elif after.channel and '🛸' in after.channel.name:
@@ -135,8 +148,12 @@ async def on_voice_state_update(member, before, after):
         for emoji in emojis:
             await message.add_reaction(emoji)
 
-    with open('rooms.json', 'w') as file:
-        json.dump(rooms, file)
+    try:
+        with open('rooms.json', 'w') as file:
+            json.dump(rooms, file)
+    except Exception as e:
+        logging.error(f"Error writing to rooms.json: {e}")
+
 
 #--------------------------------------#
 #           On Reaction Add            #
@@ -728,39 +745,49 @@ async def join(ctx, user: discord.Member, password: str):
         await ctx.send("The user has not set a password for the room.")
 
 
-@bot.slash_command(name="massmove", description="Move all users with a specific role from any voice channel to a specified channel")
-async def massmove(ctx, role: discord.Role, target_channel: discord.VoiceChannel):
-    if any(role.id in ALLOWED_ROLE_IDS for role in ctx.author.roles):
-        # Send an initial response
-        await ctx.respond(f"Starting to move all members with the {role.name} role to {target_channel.name}...")
+@bot.slash_command(name="move_all", description="Move all users with a specific role from all voice channels to a specified channel")
+async def move_all(ctx, role: discord.Role, target_channel: discord.VoiceChannel):
+    if target_channel is None:
+        await ctx.respond("Please specify a valid target channel.")
+        return
 
-        for vc in ctx.guild.voice_channels:
-            for member in vc.members:
-                if role in member.roles:
+    if any(role.id for role in ctx.author.roles if role.id in ALLOWED_ROLE_IDS):
+        await ctx.respond(f"Starting to move all members with the {role.name} role to {target_channel.name}...")
+        
+        members_with_role = [member for member in ctx.guild.members if role in member.roles]
+        for member in members_with_role:
+            if member.voice and member.voice.channel:
+                try:
                     await member.move_to(target_channel)
                     await asyncio.sleep(MOVE_DELAY)
+                except discord.HTTPException:
+                    continue
         
-        # Send a follow-up message when the command is complete
-        await ctx.respond(f"Moved all members with the {role.name} role to {target_channel.name}")
+        await ctx.send(f"Moved all members with the {role.name} role to {target_channel.name}")
     else:
         await ctx.respond("You do not have the required role to use this command!")
 
-@bot.slash_command(name="moveus", description="Move all users with a specific role from the user's voice channel to a specified channel")
-async def moveus(ctx, role: discord.Role, target_channel: discord.VoiceChannel):
-    if any(role.id in ALLOWED_ROLE_IDS for role in ctx.author.roles):
+@bot.slash_command(name="move_us", description="Move all users with a specific role from the user's voice channel to a specified channel")
+async def move_us(ctx, role: discord.Role, target_channel: discord.VoiceChannel):
+    if target_channel is None:
+        await ctx.respond("Please specify a valid target channel.")
+        return
+
+    if any(role.id for role in ctx.author.roles if role.id in ALLOWED_ROLE_IDS):
         if ctx.author.voice and ctx.author.voice.channel:
             source_channel = ctx.author.voice.channel
             
-            # Send an initial response
             await ctx.respond(f"Starting to move members with the {role.name} role from {source_channel.name} to {target_channel.name}...")
-
-            for member in source_channel.members:
-                if role in member.roles:
+            
+            members_with_role_in_source = [member for member in source_channel.members if role in member.roles]
+            for member in members_with_role_in_source:
+                try:
                     await member.move_to(target_channel)
                     await asyncio.sleep(MOVE_DELAY)
+                except discord.HTTPException:
+                    continue
             
-            # Send a follow-up message when the command is complete
-            await ctx.respond(f"Moved members with the {role.name} role from {source_channel.name} to {target_channel.name}")
+            await ctx.send(f"Moved members with the {role.name} role from {source_channel.name} to {target_channel.name}")
         else:
             await ctx.respond("You are not in a voice channel!")
     else:
