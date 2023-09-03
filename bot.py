@@ -30,62 +30,101 @@ MOVE_DELAY = 0.5  # Time in seconds
 with open('bot_token.txt', 'r') as file:
     TOKEN = file.read().strip()
 
-try:
-    with open('rooms.json', 'r') as file:
-        rooms = json.load(file)
-except (FileNotFoundError, json.JSONDecodeError):
-    rooms = {}
-logging.info(f"Loaded rooms: {rooms}")
-
-
-# Load blacklist_data
-if os.path.exists('blacklist_data.json'):
-    with open('blacklist_data.json', 'r') as file:
-        blacklist_data = json.load(file)
-else:
-    blacklist_data = {}
-
 def get_display_name(member):
     return member.nick if member.nick else member.name
 
-def load_data():
-    global room_settings
-    if os.path.exists('room_settings.json'):
-        with open('room_settings.json', 'r') as f:
-            # Convert lists back to sets after loading
-            loaded_room_settings = json.load(f)
-            room_settings = {int(user_id): {key: set(value) if isinstance(value, list) else value for key, value in settings.items()} for user_id, settings in loaded_room_settings.items()}
+
+class RoomsManager:
+    def __init__(self):
+        self.rooms = self.load_data('rooms.json')
+        self.room_settings = self.load_data('room_settings.json')
+        self.blacklist_data = self.load_data('blacklist_data.json', default={})
+        logging.info(f"Loaded rooms: {self.rooms}")
+
+    @staticmethod
+    def load_data(filename, default=None):
+        try:
+            with open(filename, 'r') as file:
+                return json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return default or {}
+
+    def update_room_owner(self, channel_id, new_owner_id):
+        self.rooms[channel_id] = new_owner_id
+
+    def save_rooms(self):
+        try:
+            with open('rooms.json', 'w') as file:
+                json.dump(self.rooms, file)
+        except Exception as e:
+            logging.error(f"Error writing to rooms.json: {e}")
+
+    def save_room_settings(self):
+        try:
+            with open('room_settings.json', 'w') as file:
+                json.dump(self.room_settings, file)
+        except Exception as e:
+            logging.error(f"Error writing to room_settings.json: {e}")
+
+    def save_all(self):
+        self.save_rooms()
+        self.save_room_settings()
+
+    def check_rooms(self):
+        to_remove = []
+
+        for channel_id, owner_id in self.rooms.items():
+            channel = bot.get_channel(channel_id)
+
+            # If the channel doesn't exist or is empty, mark it for removal
+            if channel is None or not channel.members:
+                to_remove.append(channel_id)
+
+        # Remove marked channels from the rooms dictionary
+        for channel_id in to_remove:
+            del self.rooms[channel_id]
+
+        self.save_rooms()
+
+rooms_manager = RoomsManager()
+
 
 @bot.event
 async def on_voice_state_update(member, before, after):
-    if member.bot:  # Ignore all bots  # Ignore bot's own voice state updates
+    logging.info(f"Voice state update detected for member: {member.name}")
+    if before.channel != after.channel:
+        logging.info(f"{member.name} moved from {before.channel} to {after.channel}")
+
+    if member is bot.user:  # Ignore bot's own voice state updates
         return
 
-    # When a user leaves a channel
-    if before.channel is not None and after.channel is None:
-        if before.channel.id in rooms and rooms[before.channel.id] == member.id:  # If the user leaving is the owner
-            remaining_members = before.channel.members
-            if remaining_members:  # If there are still members in the room
-                # Sort the members by top role's position (which is a measure of rank)
-                remaining_members.sort(key=lambda m: m.top_role.position, reverse=True)
-                new_owner = remaining_members[0]  # The highest ranked member is the new owner
-                rooms[before.channel.id] = new_owner.id  # Update the owner in the rooms dictionary
-                # Update the channel name here with the new owner's name
-                await before.channel.edit(name=f'👽┃{new_owner.nick if new_owner.nick else new_owner.name}\'s room')
-                # send a message to the voice chat the new owner
-                await before.channel.send(f'{new_owner.mention} you are now the owner of this room')
-            else:  # If no members left in the room
-                try:
-                    await before.channel.delete()
-                except Exception as e:
-                    logging.error(f"Error deleting channel {before.channel.id}: {e}")
+    def is_owner(user, channel):
+        return channel.id in rooms_manager.rooms and rooms_manager.rooms.get(channel.id) == user.id
 
-    # Do something when a user joins a '🛸' channel
-    elif after.channel and '🛸' in after.channel.name:
-        # print the name of the user who joined the channel
-        print(f'{member.name} is creating a room')
+    # Handle room deletion when owner leaves and no members remain
+    if before.channel and not after.channel and is_owner(member, before.channel):
+        remaining_members = before.channel.members
+        if not remaining_members:
+            try:
+                await before.channel.delete()
+                logging.info(f"Channel {before.channel.name} has been successfully deleted.")
+            except Exception as e:
+                logging.error(f"Error deleting channel {before.channel.id}: {e}")
+            return
+        remaining_members.sort(key=lambda m: m.top_role.position, reverse=True)
+        new_owner = remaining_members[0]
+        rooms_manager.update_room_owner(before.channel.id, new_owner.id)
+        await before.channel.edit(name=f'👽┃{get_display_name(new_owner)}\'s room')
+        await before.channel.send(f'{new_owner.mention} you are now the owner of this room')
+        return
+
+    # Handle room creation when a user joins the '🛸' channel
+    if after.channel and '🛸' in after.channel.name:
+        logging.info(f'{member.name} has joined the 🛸 channel and is attempting to create a room.')
+
+        # Setting room permissions based on user settings
         overwrites = {**after.channel.overwrites}  # Copy the permission overwrites from the 🛸 channel
-        if member.id in room_settings:
+        if member.id in rooms_manager.room_settings:
             settings = room_settings[member.id]
             # Apply the whitelist
             if settings["whitelist_enabled"]:
@@ -100,32 +139,42 @@ async def on_voice_state_update(member, before, after):
                     if user:
                         overwrites[user] = discord.PermissionOverwrite(connect=False)
 
+        # Channel naming logic
         base_name = f'👽┃{get_display_name(member)}\'s room'
         channel_name = base_name
         counter = 1
-
-        # Check if a channel with the desired name exists
-        while any(channel.name == channel_name for channel in after.channel.category.channels):
+        channel_names = {channel.name for channel in after.channel.category.channels}
+        while channel_name in channel_names:
             channel_name = f"{base_name} ({counter})"
             counter += 1
 
-        new_channel = await after.channel.category.create_voice_channel(
-            name=channel_name,
-            user_limit=after.channel.user_limit,
-            overwrites=overwrites
-        )
+        # Channel creation
+        try:
+            new_channel = await after.channel.category.create_voice_channel(
+                name=channel_name,
+                user_limit=after.channel.user_limit,
+                overwrites=overwrites
+            )
+            logging.info(f'Channel {channel_name} has been successfully created.')
+        except Exception as e:
+            logging.error(f"Error creating channel {channel_name}: {e}")
+            return
 
-        await member.move_to(new_channel)
-        rooms[new_channel.id] = member.id
+        # Move user to the new channel
+        try:
+            await member.move_to(new_channel)
+            logging.info(f'Member {member.name} has been successfully moved to {channel_name}.')
+        except Exception as e:
+            logging.error(f"Error moving member {member.name} to {channel_name}: {e}")
+            return
 
+        rooms_manager.update_room_owner(new_channel.id, member.id)
 
-        # Create the main embed message
         embed = discord.Embed(
             title='Welcome to your custom room!',
             description='You can customize your room by clicking emojis:'
         )
 
-        # Add Description Control Panel field
         embed.add_field(name='Givemhells LFG Tool',
                         value='Choose One of two\n'
                               '🌴 - Chill-out rooms (NO Religion or Politics)\n'
@@ -159,23 +208,14 @@ async def on_voice_state_update(member, before, after):
         message = await new_channel.send(embed=embed)
         emojis = ['🌴', '🔞', '⏱', '🎉', '🎙️', '🃏', '📺', '🔒', '🎮', '📋', '🔈', '🔉', '🔊', '💻', '💾']
 
-        async def add_single_reaction(message, emoji):
+        for emoji in emojis:
             try:
                 await message.add_reaction(emoji)
             except discord.errors.NotFound:
                 logging.warning(f"Channel {message.channel.id} not found when trying to add reaction {emoji}.")
 
-        await asyncio.gather(*(add_single_reaction(message, emoji) for emoji in emojis))
-
-
-
-    try:
-        with open('rooms.json', 'w') as file:
-            json.dump(rooms, file)
-    except Exception as e:
-        logging.error(f"Error writing to rooms.json: {e}")
-
-
+        rooms_manager.save_all()
+        logging.info(f"Voice state update processing completed for {member.name}")
 #--------------------------------------#
 #           On Reaction Add            #
 #--------------------------------------#
@@ -189,7 +229,7 @@ async def on_reaction_add(reaction, user):
     if not isinstance(channel, discord.VoiceChannel):
         return
 
-    if rooms.get(channel.id) != user.id:
+    if rooms_manager.rooms.get(channel.id) != user.id:
         print('User is not the owner of the room')
         await channel.send(f'{user.mention} you are not the owner of the room')
         for react in reaction.message.reactions:
@@ -817,27 +857,11 @@ async def move_us(ctx, role: discord.Role, target_channel: discord.VoiceChannel)
         await ctx.respond("You do not have the required role to use this command!")
 
 
+
 @bot.event
 async def on_ready():
     print(f'{bot.user.name} has connected to Discord!')
-    global rooms
-    to_remove = []
-
-    for channel_id, owner_id in rooms.items():
-        channel = bot.get_channel(channel_id)
-        
-        # If the channel doesn't exist or is empty, mark it for removal
-        if channel is None or not channel.members:
-            to_remove.append(channel_id)
-
-    # Remove marked channels from the rooms dictionary
-    for channel_id in to_remove:
-        del rooms[channel_id]
-
-    # Optionally, save the updated rooms data to rooms.json
-    with open('rooms.json', 'w') as file:
-        json.dump(rooms, file)
-
+    rooms_manager.check_rooms()
     print(f'{bot.user.name} has finished checking rooms!')
 
 
